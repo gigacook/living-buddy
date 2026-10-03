@@ -33,7 +33,7 @@ pub async fn session(State(state): State<AppState>, ctx: RequestCtx, headers: He
     };
     let demo = get_setting(&state.db, "demo_seeded").await?.is_some();
     Ok(Json(SessionInfo {
-        mode: state.config.mode.clone(),
+        mode: state.config.mode,
         version: env!("CARGO_PKG_VERSION").to_string(),
         admin_available: ctx.admin,
         sharing_enabled: sharing_enabled(&state).await,

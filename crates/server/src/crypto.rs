@@ -61,10 +61,7 @@ impl Cipher {
     pub fn encrypt(&self, plaintext: &str) -> Result<String> {
         let mut nonce = [0u8; 12];
         rand::rngs::OsRng.fill_bytes(&mut nonce);
-        let ct = self
-            .cipher
-            .encrypt(Nonce::from_slice(&nonce), plaintext.as_bytes())
-            .map_err(|_| anyhow!("encryption failed"))?;
+        let ct = self.cipher.encrypt(Nonce::from_slice(&nonce), plaintext.as_bytes()).map_err(|_| anyhow!("encryption failed"))?;
         let mut out = nonce.to_vec();
         out.extend(ct);
         Ok(format!("v1:{}", B64.encode(out)))
@@ -77,10 +74,8 @@ impl Cipher {
             bail!("ciphertext too short");
         }
         let (nonce, ct) = bytes.split_at(12);
-        let pt = self
-            .cipher
-            .decrypt(Nonce::from_slice(nonce), ct)
-            .map_err(|_| anyhow!("decryption failed (wrong key or corrupted data)"))?;
+        let pt =
+            self.cipher.decrypt(Nonce::from_slice(nonce), ct).map_err(|_| anyhow!("decryption failed (wrong key or corrupted data)"))?;
         Ok(String::from_utf8(pt)?)
     }
 }

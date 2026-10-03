@@ -92,7 +92,7 @@ export function AlarmWatcher() {
           <button type="button" className="btn" onClick={() => close(10)}>
             <AlarmClock size={18} aria-hidden /> Snooze 10 min
           </button>
-          <button type="button" className="btn btn-primary" onClick={() => close()} autoFocus>
+          <button type="button" className="btn btn-primary" onClick={() => close()} data-autofocus>
             Got it
           </button>
         </>

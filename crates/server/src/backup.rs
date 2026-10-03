@@ -103,7 +103,12 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let state = crate::test_state(dir.path()).await;
         let now = crate::db::ts(state.now());
-        sqlx::query("INSERT INTO members (id, display_name, color, prefs, created_at, updated_at) VALUES ('m1','Robin','mint','{}',?,?)").bind(&now).bind(&now).execute(&state.db).await.unwrap();
+        sqlx::query("INSERT INTO members (id, display_name, color, prefs, created_at, updated_at) VALUES ('m1','Robin','mint','{}',?,?)")
+            .bind(&now)
+            .bind(&now)
+            .execute(&state.db)
+            .await
+            .unwrap();
         sqlx::query("INSERT INTO calendar_sources (id, name, kind, url_ciphertext, created_at, updated_at) VALUES ('s1','Feed','url','v1:SECRET',?,?)").bind(&now).bind(&now).execute(&state.db).await.unwrap();
         let export = export_json(&state).await.unwrap();
         let text = export.to_string();

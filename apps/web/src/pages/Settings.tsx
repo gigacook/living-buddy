@@ -199,8 +199,15 @@ function Admin() {
   const qc = useQueryClient();
   const toast = useToast();
   const settings = useQuery({ queryKey: ["admin", "settings"], queryFn: api.admin.settings });
+  const [shareOn, setShareOn] = useState(false);
+  useEffect(() => {
+    if (settings.data) setShareOn(settings.data.sharingEnabled);
+  }, [settings.data]);
   const sharing = useMutation({
-    mutationFn: (v: boolean) => api.admin.patchSettings({ sharingEnabled: v }),
+    mutationFn: (v: boolean) => {
+      setShareOn(v);
+      return api.admin.patchSettings({ sharingEnabled: v });
+    },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["admin"] });
       qc.invalidateQueries({ queryKey: keys.session });
@@ -219,7 +226,7 @@ function Admin() {
         </p>
       )}
       <label className="check">
-        <input type="checkbox" checked={settings.data?.sharingEnabled ?? false} onChange={(e) => sharing.mutate(e.target.checked)} />
+        <input type="checkbox" checked={shareOn} onChange={(e) => sharing.mutate(e.target.checked)} />
         Allow read-only share links (turning this off stops all existing links)
       </label>
       <AiSection />

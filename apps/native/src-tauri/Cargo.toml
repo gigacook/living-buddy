@@ -1,0 +1,35 @@
+[package]
+name = "tendly-native"
+version = "0.1.0"
+description = "Tendly native shell (Tauri 2). Runs the Tendly server in-process; no network port, Node or Docker needed."
+edition = "2021"
+publish = false
+rust-version = "1.80"
+
+[lib]
+name = "tendly_native_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-notification = "2"
+tendly-server = { path = "../../../crates/server" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["sync"] }
+tower = { version = "0.5", features = ["util"] }
+http-body-util = "0.1"
+axum = "0.8"
+anyhow = "1"
+chrono-tz = "0.10"
+
+[profile.release]
+lto = "thin"
+strip = true
+
+[features]
+# Set by `tauri build`; bundles the web UI instead of using the dev server.
+custom-protocol = ["tauri/custom-protocol"]

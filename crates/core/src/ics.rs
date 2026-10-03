@@ -6,9 +6,7 @@
 //! SEQUENCE, generated VTIMEZONE blocks and correctly escaped, folded lines.
 
 use crate::recurrence::{resolve_local, RRule};
-use chrono::{
-    DateTime, Datelike, Duration, NaiveDate, NaiveDateTime, Offset, TimeZone, Timelike, Utc,
-};
+use chrono::{DateTime, Datelike, Duration, NaiveDate, NaiveDateTime, Offset, TimeZone, Timelike, Utc};
 use chrono_tz::Tz;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -124,10 +122,13 @@ impl IcsEvent {
         if let Some(e) = &self.end {
             return e.clone();
         }
-        let dur = self
-            .duration_secs
-            .map(Duration::seconds)
-            .unwrap_or_else(|| if self.start.is_date() { Duration::days(1) } else { Duration::zero() });
+        let dur = self.duration_secs.map(Duration::seconds).unwrap_or_else(|| {
+            if self.start.is_date() {
+                Duration::days(1)
+            } else {
+                Duration::zero()
+            }
+        });
         self.start.with_local(self.start.local() + dur)
     }
 
@@ -173,13 +174,7 @@ pub struct Limits {
 
 impl Default for Limits {
     fn default() -> Self {
-        Limits {
-            max_bytes: 5 * 1024 * 1024,
-            max_events: 20_000,
-            max_line_chars: 64 * 1024,
-            max_depth: 8,
-            max_properties: 400_000,
-        }
+        Limits { max_bytes: 5 * 1024 * 1024, max_events: 20_000, max_line_chars: 64 * 1024, max_depth: 8, max_properties: 400_000 }
     }
 }
 
@@ -204,10 +199,7 @@ struct Property {
 
 impl Property {
     fn param(&self, key: &str) -> Option<&str> {
-        self.params
-            .iter()
-            .find(|(k, _)| k.eq_ignore_ascii_case(key))
-            .map(|(_, v)| v.as_str())
+        self.params.iter().find(|(k, _)| k.eq_ignore_ascii_case(key)).map(|(_, v)| v.as_str())
     }
 }
 
@@ -242,10 +234,8 @@ fn parse_content_line(line: &str) -> Option<Property> {
     if name.is_empty() || !name.chars().all(|c| c.is_ascii_alphanumeric() || c == '-') {
         return None;
     }
-    let params = parts[1..]
-        .iter()
-        .filter_map(|p| p.split_once('=').map(|(k, v)| (k.trim().to_ascii_uppercase(), v.trim().to_string())))
-        .collect();
+    let params =
+        parts[1..].iter().filter_map(|p| p.split_once('=').map(|(k, v)| (k.trim().to_ascii_uppercase(), v.trim().to_string()))).collect();
     Some(Property { name, params, value: value.to_string() })
 }
 
@@ -368,15 +358,16 @@ fn parse_time_value(p: &Property, warnings: &mut Vec<String>) -> Option<IcsTime>
         return NaiveDate::parse_from_str(&v[..v.len().min(8)], "%Y%m%d").ok().map(|date| IcsTime::Date { date });
     }
     if let Some(s) = v.strip_suffix('Z') {
-        return NaiveDateTime::parse_from_str(s, "%Y%m%dT%H%M%S")
-            .ok()
-            .map(|n| IcsTime::Utc { at: Utc.from_utc_datetime(&n) });
+        return NaiveDateTime::parse_from_str(s, "%Y%m%dT%H%M%S").ok().map(|n| IcsTime::Utc { at: Utc.from_utc_datetime(&n) });
     }
     let local = NaiveDateTime::parse_from_str(v, "%Y%m%dT%H%M%S").ok()?;
     match p.param("TZID") {
         Some(tzid) => {
             if resolve_tzid(tzid).is_none() {
-                warnings.push(format!("Unknown time zone \"{}\"; times were read in the calendar's default zone.", crate::model::clean_text(tzid, 60, false)));
+                warnings.push(format!(
+                    "Unknown time zone \"{}\"; times were read in the calendar's default zone.",
+                    crate::model::clean_text(tzid, 60, false)
+                ));
             }
             Some(IcsTime::Zoned { local, tzid: crate::model::clean_text(tzid, 80, false) })
         }
@@ -521,9 +512,7 @@ pub fn parse(input: &str, limits: &Limits) -> Result<ParsedCalendar, IcsError> {
                     }
                 } else if stack.len() == 1 && stack[0] == "VCALENDAR" {
                     match prop.name.as_str() {
-                        "X-WR-CALNAME" | "NAME" => {
-                            cal.name = Some(crate::model::clean_text(&unescape_text(&prop.value), 120, false))
-                        }
+                        "X-WR-CALNAME" | "NAME" => cal.name = Some(crate::model::clean_text(&unescape_text(&prop.value), 120, false)),
                         "X-WR-TIMEZONE" => cal.default_tz = Some(crate::model::clean_text(&prop.value, 80, false)),
                         "METHOD" => cal.method = Some(prop.value.trim().to_ascii_uppercase()),
                         _ => {}
@@ -589,10 +578,7 @@ fn build_event(props: &[Property], warnings: &mut Vec<String>) -> Option<IcsEven
                 rdates.extend(parse_time_list(p, warnings))
             }
             "CATEGORIES" => categories.extend(
-                split_unescaped_commas(&p.value)
-                    .into_iter()
-                    .map(|c| crate::model::clean_text(&c, 60, false))
-                    .filter(|c| !c.is_empty()),
+                split_unescaped_commas(&p.value).into_iter().map(|c| crate::model::clean_text(&c, 60, false)).filter(|c| !c.is_empty()),
             ),
             _ => {}
         }
@@ -602,12 +588,8 @@ fn build_event(props: &[Property], warnings: &mut Vec<String>) -> Option<IcsEven
         uid,
         uid_generated,
         summary,
-        description: get("DESCRIPTION")
-            .map(|p| crate::model::clean_text(&unescape_text(&p.value), 10_000, true))
-            .filter(|s| !s.is_empty()),
-        location: get("LOCATION")
-            .map(|p| crate::model::clean_text(&unescape_text(&p.value), 500, false))
-            .filter(|s| !s.is_empty()),
+        description: get("DESCRIPTION").map(|p| crate::model::clean_text(&unescape_text(&p.value), 10_000, true)).filter(|s| !s.is_empty()),
+        location: get("LOCATION").map(|p| crate::model::clean_text(&unescape_text(&p.value), 500, false)).filter(|s| !s.is_empty()),
         start,
         end,
         duration_secs,
@@ -633,6 +615,7 @@ pub struct Occurrence {
 
 /// Expands an event into occurrences overlapping `[from, to)`. Returns a
 /// warning when the recurrence rule is unsupported (only the first instance is used).
+#[allow(clippy::too_many_arguments)]
 pub fn expand_occurrences(
     start: &IcsTime,
     end: &IcsTime,
@@ -774,7 +757,11 @@ pub fn vtimezone(tz: Tz, year: i32) -> Vec<String> {
             let mut hi = next;
             while hi - lo > Duration::minutes(1) {
                 let mid = lo + (hi - lo) / 2;
-                if offset_at(mid) == prev { lo = mid } else { hi = mid }
+                if offset_at(mid) == prev {
+                    lo = mid
+                } else {
+                    hi = mid
+                }
             }
             transitions.push((hi, prev, off));
             prev = off;
@@ -795,11 +782,8 @@ pub fn vtimezone(tz: Tz, year: i32) -> Vec<String> {
         for (at, from, to) in &transitions {
             let local = at.naive_utc() + Duration::seconds(*from as i64);
             let day = local.day();
-            let ordinal = if day + 7 > crate::recurrence::days_in_month(local.year(), local.month()) {
-                -1
-            } else {
-                ((day - 1) / 7 + 1) as i32
-            };
+            let ordinal =
+                if day + 7 > crate::recurrence::days_in_month(local.year(), local.month()) { -1 } else { ((day - 1) / 7 + 1) as i32 };
             let rule = RRule {
                 by_day: vec![crate::recurrence::WeekdayNum { ordinal: Some(ordinal), weekday: local.weekday() }],
                 by_month: vec![local.month()],
@@ -812,9 +796,7 @@ pub fn vtimezone(tz: Tz, year: i32) -> Vec<String> {
                 .collect::<Vec<_>>();
             let date_1970 = if ordinal == -1 { first_1970.last() } else { first_1970.get((ordinal - 1) as usize) };
             let kind = if *to == max_off && from != to { "DAYLIGHT" } else { "STANDARD" };
-            let dtstart = date_1970
-                .map(|d| d.and_hms_opt(local.hour(), local.minute(), 0).expect("valid"))
-                .unwrap_or(local);
+            let dtstart = date_1970.map(|d| d.and_hms_opt(local.hour(), local.minute(), 0).expect("valid")).unwrap_or(local);
             lines.extend([
                 format!("BEGIN:{kind}"),
                 format!("DTSTART:{}", dtstart.format("%Y%m%dT%H%M%S")),
@@ -929,7 +911,8 @@ mod tests {
         let swim = &cal.events[0];
         let from = Utc.with_ymd_and_hms(2026, 10, 1, 0, 0, 0).unwrap();
         let to = Utc.with_ymd_and_hms(2026, 12, 1, 0, 0, 0).unwrap();
-        let (occ, warn) = expand_occurrences(&swim.start, &swim.effective_end(), swim.rrule.as_deref(), &swim.exdates, &[], Tz::UTC, from, to, 100);
+        let (occ, warn) =
+            expand_occurrences(&swim.start, &swim.effective_end(), swim.rrule.as_deref(), &swim.exdates, &[], Tz::UTC, from, to, 100);
         assert!(warn.is_none());
         let keys: Vec<String> = occ.iter().map(|o| o.instance_key.clone()).collect();
         // 10-19 is CEST (UTC+2), 10-26 excluded, 11-02 and 11-09 are CET (UTC+1).
@@ -999,7 +982,11 @@ mod tests {
         for l in folded.split("\r\n") {
             assert!(l.len() <= 75);
         }
-        let back = parse(&format!("BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\nUID:x\r\nDTSTART:20260101T000000Z\r\n{folded}END:VEVENT\r\nEND:VCALENDAR\r\n"), &Limits::default()).unwrap();
+        let back = parse(
+            &format!("BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\nUID:x\r\nDTSTART:20260101T000000Z\r\n{folded}END:VEVENT\r\nEND:VCALENDAR\r\n"),
+            &Limits::default(),
+        )
+        .unwrap();
         assert_eq!(back.events[0].summary, "ö".repeat(80));
     }
 

@@ -42,14 +42,12 @@ pub struct SourceRow {
 pub const SOURCE_SELECT: &str = "SELECT id, name, kind, url_ciphertext, url_display, group_id, owner_id, is_private, priority, enabled, refresh_minutes, etag, last_modified_header, last_fetched_at, last_status, last_error, warnings, default_tz, created_at FROM calendar_sources";
 
 /// Sources a person can see: their own, their groups', and shared ungrouped ones.
-pub const SOURCE_VISIBLE: &str = "(owner_id = ?1 OR group_id IN (SELECT group_id FROM group_members WHERE member_id = ?1) OR (is_private = 0 AND group_id IS NULL))";
+pub const SOURCE_VISIBLE: &str =
+    "(owner_id = ?1 OR group_id IN (SELECT group_id FROM group_members WHERE member_id = ?1) OR (is_private = 0 AND group_id IS NULL))";
 
 impl SourceRow {
     pub fn tz(&self, fallback: &str) -> Tz {
-        self.default_tz
-            .as_deref()
-            .and_then(tendly_core::ics::resolve_tzid)
-            .unwrap_or_else(|| fallback.parse().unwrap_or(Tz::UTC))
+        self.default_tz.as_deref().and_then(tendly_core::ics::resolve_tzid).unwrap_or_else(|| fallback.parse().unwrap_or(Tz::UTC))
     }
 
     pub async fn to_api(&self, state: &AppState) -> Result<CalendarSource> {
@@ -210,11 +208,8 @@ pub async fn apply_feed(
     origin: &str,
     snapshot: bool,
 ) -> Result<ApplyStats> {
-    let tz = cal
-        .default_tz
-        .as_deref()
-        .and_then(tendly_core::ics::resolve_tzid)
-        .unwrap_or_else(|| source.tz(&state.config.default_timezone));
+    let tz =
+        cal.default_tz.as_deref().and_then(tendly_core::ics::resolve_tzid).unwrap_or_else(|| source.tz(&state.config.default_timezone));
     let now = ts(state.now());
     let activity_source = format!("{origin}:{}", source.name);
     let mut stats = ApplyStats::default();
@@ -261,16 +256,29 @@ pub async fn apply_feed(
                 stats.inserted += 1;
                 if logged < MAX_ACTIVITY_PER_RUN {
                     logged += 1;
-                    record(&mut tx, &now, NewActivity {
-                        actor, source: &activity_source, entity_type: "calendar_event", entity_id: &id, group_id: source.group_id.as_deref(),
-                        op: "create", summary: format!("“{}” appeared in {}", e.summary, source.name), revision: 1, before: None,
-                        after: Some(json!({"title": e.summary, "start": e.start, "sequence": e.sequence})),
-                    }).await?;
+                    record(
+                        &mut tx,
+                        &now,
+                        NewActivity {
+                            actor,
+                            source: &activity_source,
+                            entity_type: "calendar_event",
+                            entity_id: &id,
+                            group_id: source.group_id.as_deref(),
+                            op: "create",
+                            summary: format!("“{}” appeared in {}", e.summary, source.name),
+                            revision: 1,
+                            before: None,
+                            after: Some(json!({"title": e.summary, "start": e.start, "sequence": e.sequence})),
+                        },
+                    )
+                    .await?;
                 }
             }
             UpsertDecision::Update { reason } => {
                 let (id, _, _, _, old_status, revision, _) = existing.clone().expect("update implies existing");
-                let old: Option<(String, String)> = sqlx::query_as("SELECT title, start_json FROM calendar_events WHERE id = ?").bind(&id).fetch_optional(&mut *tx).await?;
+                let old: Option<(String, String)> =
+                    sqlx::query_as("SELECT title, start_json FROM calendar_events WHERE id = ?").bind(&id).fetch_optional(&mut *tx).await?;
                 sqlx::query(
                     "UPDATE calendar_events SET title=?, description=?, location=?, start_json=?, end_json=?, rrule=?, exdates=?, rdates=?, status=?, sequence=?, dtstamp=?, last_modified=?, categories=?, content_hash=?, category=?, removed_upstream=0, revision=revision+1, start_utc=?, updated_at=? WHERE id=?",
                 )
@@ -302,14 +310,30 @@ pub async fn apply_feed(
                 }
                 if logged < MAX_ACTIVITY_PER_RUN {
                     logged += 1;
-                    record(&mut tx, &now, NewActivity {
-                        actor, source: &activity_source, entity_type: "calendar_event", entity_id: &id, group_id: source.group_id.as_deref(),
-                        op: if cancelled_now { "cancel" } else { "update" },
-                        summary: format!("“{}” {} in {} ({reason})", e.summary, if cancelled_now { "was cancelled" } else { "changed" }, source.name),
-                        revision: revision as u32 + 1,
-                        before: old.map(|(t, s)| json!({"title": t, "start": serde_json::from_str::<serde_json::Value>(&s).unwrap_or_default()})),
-                        after: Some(json!({"title": e.summary, "start": e.start, "sequence": e.sequence, "status": e.status.as_str()})),
-                    }).await?;
+                    record(
+                        &mut tx,
+                        &now,
+                        NewActivity {
+                            actor,
+                            source: &activity_source,
+                            entity_type: "calendar_event",
+                            entity_id: &id,
+                            group_id: source.group_id.as_deref(),
+                            op: if cancelled_now { "cancel" } else { "update" },
+                            summary: format!(
+                                "“{}” {} in {} ({reason})",
+                                e.summary,
+                                if cancelled_now { "was cancelled" } else { "changed" },
+                                source.name
+                            ),
+                            revision: revision as u32 + 1,
+                            before: old.map(
+                                |(t, s)| json!({"title": t, "start": serde_json::from_str::<serde_json::Value>(&s).unwrap_or_default()}),
+                            ),
+                            after: Some(json!({"title": e.summary, "start": e.start, "sequence": e.sequence, "status": e.status.as_str()})),
+                        },
+                    )
+                    .await?;
                 }
             }
             UpsertDecision::Skip { .. } => stats.unchanged += 1,
@@ -333,21 +357,46 @@ pub async fn apply_feed(
                 stats.cancelled += 1;
                 if logged < MAX_ACTIVITY_PER_RUN {
                     logged += 1;
-                    record(&mut tx, &now, NewActivity {
-                        actor, source: &activity_source, entity_type: "calendar_event", entity_id: &id, group_id: source.group_id.as_deref(),
-                        op: "removed_upstream", summary: format!("“{title}” is no longer in {}", source.name), revision: revision as u32 + 1,
-                        before: None, after: None,
-                    }).await?;
+                    record(
+                        &mut tx,
+                        &now,
+                        NewActivity {
+                            actor,
+                            source: &activity_source,
+                            entity_type: "calendar_event",
+                            entity_id: &id,
+                            group_id: source.group_id.as_deref(),
+                            op: "removed_upstream",
+                            summary: format!("“{title}” is no longer in {}", source.name),
+                            revision: revision as u32 + 1,
+                            before: None,
+                            after: None,
+                        },
+                    )
+                    .await?;
                 }
             }
         }
     }
     let total = stats.inserted + stats.updated + stats.cancelled;
     if logged >= MAX_ACTIVITY_PER_RUN && total > logged {
-        record(&mut tx, &now, NewActivity {
-            actor, source: &activity_source, entity_type: "calendar_source", entity_id: &source.id, group_id: source.group_id.as_deref(),
-            op: origin, summary: format!("{} more changes in {} were applied", total - logged, source.name), revision: 0, before: None, after: None,
-        }).await?;
+        record(
+            &mut tx,
+            &now,
+            NewActivity {
+                actor,
+                source: &activity_source,
+                entity_type: "calendar_source",
+                entity_id: &source.id,
+                group_id: source.group_id.as_deref(),
+                op: origin,
+                summary: format!("{} more changes in {} were applied", total - logged, source.name),
+                revision: 0,
+                before: None,
+                after: None,
+            },
+        )
+        .await?;
     }
     sqlx::query("UPDATE calendar_sources SET warnings = ?, updated_at = ? WHERE id = ?")
         .bind(serde_json::to_string(&cal.warnings.iter().take(20).collect::<Vec<_>>())?)
@@ -434,7 +483,9 @@ async fn member_group_ids(state: &AppState, member: &str) -> Result<Vec<String>>
 async fn visible_events(state: &AppState, viewer: &Viewer<'_>, q: &OccQuery) -> Result<Vec<(EventRow, SourceRow)>> {
     let sources: Vec<SourceRow> = match viewer {
         Viewer::Actor(a) => visible_sources(state, a).await?,
-        Viewer::Share(_) => sqlx::query_as::<_, SourceRow>(&format!("{SOURCE_SELECT} ORDER BY priority, created_at")).fetch_all(&state.db).await?,
+        Viewer::Share(_) => {
+            sqlx::query_as::<_, SourceRow>(&format!("{SOURCE_SELECT} ORDER BY priority, created_at")).fetch_all(&state.db).await?
+        }
     };
     let member_groups = match &q.member_id {
         Some(m) => Some(member_group_ids(state, m).await?),
@@ -496,7 +547,8 @@ pub async fn occurrences(state: &AppState, viewer: Viewer<'_>, q: &OccQuery) -> 
             .collect();
         for (r, s) in &rows {
             let tz = s.tz(&state.config.default_timezone);
-            let (occs, _warning) = expand_occurrences(&r.start(), &r.end(), r.rrule.as_deref(), &r.exdates(), &r.rdates(), tz, q.from, q.to, 2000);
+            let (occs, _warning) =
+                expand_occurrences(&r.start(), &r.end(), r.rrule.as_deref(), &r.exdates(), &r.rdates(), tz, q.from, q.to, 2000);
             for o in occs {
                 let is_master = r.instance_key.is_empty();
                 if is_master && overrides.contains_key(&(r.source_id.clone(), r.uid.clone(), o.instance_key.clone())) {
@@ -655,7 +707,8 @@ async fn task_occurrences(state: &AppState, viewer: &Viewer<'_>, q: &OccQuery) -
             }
         }
         if let Viewer::Share(scope) = viewer {
-            let facts = TaskFacts { group_id: t.group_id.as_deref(), owner_id: &t.owner_id, assignee_id: t.assignee_id.as_deref(), category };
+            let facts =
+                TaskFacts { group_id: t.group_id.as_deref(), owner_id: &t.owner_id, assignee_id: t.assignee_id.as_deref(), category };
             if !allows_task(scope, &facts) {
                 continue;
             }
@@ -731,9 +784,19 @@ pub async fn export_ics(state: &AppState, viewer: Viewer<'_>, q: &OccQuery, name
                 summary: "Busy".into(),
                 description: None,
                 location: None,
-                start: if o.all_day { IcsTime::Date { date: NaiveDate::parse_from_str(o.start_date.as_deref().unwrap_or(""), "%Y-%m-%d").unwrap_or(o.start.date_naive()) } } else { IcsTime::Utc { at: o.start } },
+                start: if o.all_day {
+                    IcsTime::Date {
+                        date: NaiveDate::parse_from_str(o.start_date.as_deref().unwrap_or(""), "%Y-%m-%d").unwrap_or(o.start.date_naive()),
+                    }
+                } else {
+                    IcsTime::Utc { at: o.start }
+                },
                 end: Some(if o.all_day {
-                    IcsTime::Date { date: NaiveDate::parse_from_str(o.end_date.as_deref().unwrap_or(""), "%Y-%m-%d").map(|d| d + Duration::days(1)).unwrap_or(o.end.date_naive()) }
+                    IcsTime::Date {
+                        date: NaiveDate::parse_from_str(o.end_date.as_deref().unwrap_or(""), "%Y-%m-%d")
+                            .map(|d| d + Duration::days(1))
+                            .unwrap_or(o.end.date_naive()),
+                    }
                 } else {
                     IcsTime::Utc { at: o.end }
                 }),
@@ -751,7 +814,10 @@ pub async fn export_ics(state: &AppState, viewer: Viewer<'_>, q: &OccQuery, name
         return Ok(tendly_core::ics::write_calendar(name, &out_events, state.now()));
     }
     for id in wanted_events {
-        let Some(r) = sqlx::query_as::<_, EventRow>(&format!("{EVENT_SELECT} WHERE id = ?")).bind(&id).fetch_optional(&state.db).await? else { continue };
+        let Some(r) = sqlx::query_as::<_, EventRow>(&format!("{EVENT_SELECT} WHERE id = ?")).bind(&id).fetch_optional(&state.db).await?
+        else {
+            continue;
+        };
         if !seen_uid_instance.insert((r.uid.clone(), r.instance_key.clone())) {
             continue;
         }
@@ -776,11 +842,13 @@ pub async fn export_ics(state: &AppState, viewer: Viewer<'_>, q: &OccQuery, name
         });
         // Include overrides for exported masters.
         if r.instance_key.is_empty() && r.rrule.is_some() {
-            let ovs = sqlx::query_as::<_, EventRow>(&format!("{EVENT_SELECT} WHERE source_id = ? AND uid = ? AND instance_key != '' AND removed_upstream = 0"))
-                .bind(&r.source_id)
-                .bind(&r.uid)
-                .fetch_all(&state.db)
-                .await?;
+            let ovs = sqlx::query_as::<_, EventRow>(&format!(
+                "{EVENT_SELECT} WHERE source_id = ? AND uid = ? AND instance_key != '' AND removed_upstream = 0"
+            ))
+            .bind(&r.source_id)
+            .bind(&r.uid)
+            .fetch_all(&state.db)
+            .await?;
             for ov in ovs {
                 if !seen_uid_instance.insert((ov.uid.clone(), ov.instance_key.clone())) {
                     continue;
@@ -806,7 +874,8 @@ pub async fn export_ics(state: &AppState, viewer: Viewer<'_>, q: &OccQuery, name
         }
     }
     for t in tasks {
-        let tr: Option<(i64, String)> = sqlx::query_as("SELECT version, updated_at FROM tasks WHERE id = ?").bind(&t.event_id).fetch_optional(&state.db).await?;
+        let tr: Option<(i64, String)> =
+            sqlx::query_as("SELECT version, updated_at FROM tasks WHERE id = ?").bind(&t.event_id).fetch_optional(&state.db).await?;
         let (version, updated) = tr.unwrap_or((1, ts(state.now())));
         out_events.push(OutEvent {
             uid: t.uid.clone(),
@@ -814,12 +883,18 @@ pub async fn export_ics(state: &AppState, viewer: Viewer<'_>, q: &OccQuery, name
             description: if detail == ShareDetail::Full { t.description.clone() } else { None },
             location: None,
             start: if t.all_day {
-                IcsTime::Date { date: NaiveDate::parse_from_str(t.start_date.as_deref().unwrap_or(""), "%Y-%m-%d").unwrap_or(t.start.date_naive()) }
+                IcsTime::Date {
+                    date: NaiveDate::parse_from_str(t.start_date.as_deref().unwrap_or(""), "%Y-%m-%d").unwrap_or(t.start.date_naive()),
+                }
             } else {
                 IcsTime::Utc { at: t.start }
             },
             end: Some(if t.all_day {
-                IcsTime::Date { date: NaiveDate::parse_from_str(t.start_date.as_deref().unwrap_or(""), "%Y-%m-%d").map(|d| d + Duration::days(1)).unwrap_or(t.end.date_naive()) }
+                IcsTime::Date {
+                    date: NaiveDate::parse_from_str(t.start_date.as_deref().unwrap_or(""), "%Y-%m-%d")
+                        .map(|d| d + Duration::days(1))
+                        .unwrap_or(t.end.date_naive()),
+                }
             } else {
                 IcsTime::Utc { at: t.end }
             }),

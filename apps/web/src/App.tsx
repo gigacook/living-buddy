@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect } from "react";
+import { lazy, Suspense, useEffect, useRef } from "react";
 import { NavLink, Route, Routes, useLocation } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { Bell, CalendarDays, CheckSquare, Inbox, Settings as SettingsIcon, Sun, Timer, Users } from "lucide-react";
@@ -44,12 +44,17 @@ const TITLES: Record<string, string> = {
 
 function useDocumentTitle() {
   const { pathname } = useLocation();
+  const first = useRef(true);
   useEffect(() => {
     const base = "/" + (pathname.split("/")[1] ?? "");
     document.title = `${TITLES[base] ?? "Tendly"} · Tendly`;
-    // Move focus to the main heading region on navigation for screen readers.
-    const main = document.getElementById("main");
-    main?.focus({ preventScroll: true });
+    // After in-app navigation, move focus to the main region for screen readers.
+    // Not on first load, so the skip link stays the first Tab stop.
+    if (first.current) {
+      first.current = false;
+      return;
+    }
+    document.getElementById("main")?.focus({ preventScroll: true });
   }, [pathname]);
 }
 

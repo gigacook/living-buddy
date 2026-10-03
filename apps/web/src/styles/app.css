@@ -1252,3 +1252,49 @@ details.disclosure[open] > summary::before {
     transform: rotate(360deg);
   }
 }
+
+/* Flex/grid children may shrink below their content width so wide regions
+   (board, timeline, week view) scroll internally instead of widening the page. */
+.stack > *,
+.stack-sm > *,
+.grid-2 > *,
+.grid-3 > * {
+  min-width: 0;
+}
+/* Scroll containers must be positioned so absolutely positioned descendants
+   (e.g. visually hidden labels) are clipped by them, not by the page. */
+.board,
+.week-grid,
+.cal-grid,
+.column,
+.kanban-card {
+  position: relative;
+}
+button.cal-day {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 700;
+  cursor: pointer;
+  min-height: 26px;
+}
+button.cal-day:hover {
+  background: var(--surface-3);
+}
+.cal-cell.today button.cal-day {
+  background: var(--accent);
+  color: var(--accent-text);
+}
+details.menu > summary {
+  list-style: none;
+}
+details.menu > summary::-webkit-details-marker {
+  display: none;
+}
+@media (max-width: 560px) {
+  .hero-mascot {
+    display: none;
+  }
+}

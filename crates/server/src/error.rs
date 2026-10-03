@@ -59,8 +59,12 @@ impl IntoResponse for AppError {
             AppError::NotFound(what) => (StatusCode::NOT_FOUND, "not_found", format!("That {what} could not be found."), None, None),
             AppError::Conflict { message, current } => (StatusCode::CONFLICT, "conflict", message, None, current),
             AppError::Forbidden(why) => (StatusCode::FORBIDDEN, "forbidden", why.to_string(), None, None),
-            AppError::Unauthorized(code) => (StatusCode::UNAUTHORIZED, code, "This device needs to be paired first.".to_string(), None, None),
-            AppError::RateLimited => (StatusCode::TOO_MANY_REQUESTS, "rate_limited", "Too many requests. Please wait a moment.".into(), None, None),
+            AppError::Unauthorized(code) => {
+                (StatusCode::UNAUTHORIZED, code, "This device needs to be paired first.".to_string(), None, None)
+            }
+            AppError::RateLimited => {
+                (StatusCode::TOO_MANY_REQUESTS, "rate_limited", "Too many requests. Please wait a moment.".into(), None, None)
+            }
             AppError::TooLarge => (StatusCode::PAYLOAD_TOO_LARGE, "too_large", "That is larger than allowed.".into(), None, None),
             AppError::Upstream(msg) => (StatusCode::BAD_GATEWAY, "upstream_error", tendly_core::redact::redact(&msg), None, None),
             AppError::Internal(err) => {

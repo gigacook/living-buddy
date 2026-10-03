@@ -91,7 +91,11 @@ export function Today() {
               {next ? "Here's one thing to start with. Everything else can wait its turn." : "Nothing pressing right now."}
             </p>
           </div>
-          {!prefs.quiet && <Mascot pose={next ? "happy" : "celebrate"} size={88} />}
+          {!prefs.quiet && (
+            <span className="hero-mascot">
+              <Mascot pose={next ? "happy" : "celebrate"} size={88} />
+            </span>
+          )}
         </div>
       </header>
 

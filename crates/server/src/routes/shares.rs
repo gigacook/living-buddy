@@ -60,7 +60,8 @@ const SELECT: &str = "SELECT id, label, scope, created_by, created_at, expires_a
 
 pub async fn list(State(state): State<AppState>, actor: Actor) -> AppResult<Json<Vec<ShareLink>>> {
     let rows = sqlx::query_as::<_, ShareRow>(&format!("{SELECT} ORDER BY created_at DESC")).fetch_all(&state.db).await?;
-    let groups: Vec<String> = sqlx::query_scalar("SELECT group_id FROM group_members WHERE member_id = ?").bind(&actor.id).fetch_all(&state.db).await?;
+    let groups: Vec<String> =
+        sqlx::query_scalar("SELECT group_id FROM group_members WHERE member_id = ?").bind(&actor.id).fetch_all(&state.db).await?;
     Ok(Json(
         rows.into_iter()
             .map(ShareLink::from)
@@ -107,11 +108,23 @@ pub async fn create(State(state): State<AppState>, actor: Actor, Json(input): Js
         .bind(expires.map(ts))
         .execute(&mut *tx)
         .await?;
-    record(&mut tx, &ts(now), NewActivity {
-        actor: Some(&actor), source: "app", entity_type: "share", entity_id: &id, group_id: input.scope.group_ids.first().map(String::as_str),
-        op: "publish", summary: format!("{} published a read-only link “{label}”", actor.name), revision: 1, before: None,
-        after: Some(json!({"scope": input.scope, "expiresAt": expires})),
-    }).await?;
+    record(
+        &mut tx,
+        &ts(now),
+        NewActivity {
+            actor: Some(&actor),
+            source: "app",
+            entity_type: "share",
+            entity_id: &id,
+            group_id: input.scope.group_ids.first().map(String::as_str),
+            op: "publish",
+            summary: format!("{} published a read-only link “{label}”", actor.name),
+            revision: 1,
+            before: None,
+            after: Some(json!({"scope": input.scope, "expiresAt": expires})),
+        },
+    )
+    .await?;
     tx.commit().await?;
     let link: ShareLink = sqlx::query_as::<_, ShareRow>(&format!("{SELECT} WHERE id = ?")).bind(&id).fetch_one(&state.db).await?.into();
     Ok(Json(CreatedShareLink {
@@ -124,7 +137,11 @@ pub async fn create(State(state): State<AppState>, actor: Actor, Json(input): Js
 }
 
 pub async fn revoke(State(state): State<AppState>, actor: Actor, Path(id): Path<String>) -> AppResult<Json<ShareLink>> {
-    let row = sqlx::query_as::<_, ShareRow>(&format!("{SELECT} WHERE id = ?")).bind(&id).fetch_optional(&state.db).await?.ok_or(AppError::NotFound("link"))?;
+    let row = sqlx::query_as::<_, ShareRow>(&format!("{SELECT} WHERE id = ?"))
+        .bind(&id)
+        .fetch_optional(&state.db)
+        .await?
+        .ok_or(AppError::NotFound("link"))?;
     let link: ShareLink = row.into();
     let in_group = {
         let mut ok = false;
@@ -141,10 +158,23 @@ pub async fn revoke(State(state): State<AppState>, actor: Actor, Path(id): Path<
     let now = ts(state.now());
     let mut tx = state.db.begin().await?;
     sqlx::query("UPDATE share_links SET revoked_at = COALESCE(revoked_at, ?) WHERE id = ?").bind(&now).bind(&id).execute(&mut *tx).await?;
-    record(&mut tx, &now, NewActivity {
-        actor: Some(&actor), source: "app", entity_type: "share", entity_id: &id, group_id: link.scope.group_ids.first().map(String::as_str),
-        op: "revoke", summary: format!("{} revoked the link “{}”", actor.name, link.label), revision: 2, before: None, after: None,
-    }).await?;
+    record(
+        &mut tx,
+        &now,
+        NewActivity {
+            actor: Some(&actor),
+            source: "app",
+            entity_type: "share",
+            entity_id: &id,
+            group_id: link.scope.group_ids.first().map(String::as_str),
+            op: "revoke",
+            summary: format!("{} revoked the link “{}”", actor.name, link.label),
+            revision: 2,
+            before: None,
+            after: None,
+        },
+    )
+    .await?;
     tx.commit().await?;
     Ok(Json(sqlx::query_as::<_, ShareRow>(&format!("{SELECT} WHERE id = ?")).bind(&id).fetch_one(&state.db).await?.into()))
 }
@@ -167,13 +197,21 @@ async fn resolve(state: &AppState, ctx: &RequestCtx, token: &str) -> Option<Shar
     if !sharing_enabled(state).await {
         return None;
     }
-    let row = sqlx::query_as::<_, ShareRow>(&format!("{SELECT} WHERE token_hash = ?")).bind(hash_token(token)).fetch_optional(&state.db).await.ok()??;
+    let row = sqlx::query_as::<_, ShareRow>(&format!("{SELECT} WHERE token_hash = ?"))
+        .bind(hash_token(token))
+        .fetch_optional(&state.db)
+        .await
+        .ok()??;
     let link: ShareLink = row.into();
     let now = state.now();
     if link.revoked_at.is_some() || link.expires_at.map(|e| e <= now).unwrap_or(false) {
         return None;
     }
-    let _ = sqlx::query("UPDATE share_links SET last_used_at = ?, use_count = use_count + 1 WHERE id = ?").bind(ts(now)).bind(&link.id).execute(&state.db).await;
+    let _ = sqlx::query("UPDATE share_links SET last_used_at = ?, use_count = use_count + 1 WHERE id = ?")
+        .bind(ts(now))
+        .bind(&link.id)
+        .execute(&state.db)
+        .await;
     Some(link)
 }
 
@@ -197,7 +235,12 @@ pub struct ShareViewQuery {
     tz: Option<String>,
 }
 
-pub async fn public_html(State(state): State<AppState>, ctx: RequestCtx, Path(token): Path<String>, Query(q): Query<ShareViewQuery>) -> Response {
+pub async fn public_html(
+    State(state): State<AppState>,
+    ctx: RequestCtx,
+    Path(token): Path<String>,
+    Query(q): Query<ShareViewQuery>,
+) -> Response {
     let Some(link) = resolve(&state, &ctx, &token).await else { return not_found() };
     let occ = match calendar::occurrences(&state, Viewer::Share(&link.scope), &share_query(&state, &link.scope)).await {
         Ok(o) => o,

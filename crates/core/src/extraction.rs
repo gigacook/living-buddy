@@ -193,9 +193,8 @@ pub fn validate_output(raw: &Value, source_text: &str) -> Vec<SuggestionDraft> {
                     .collect()
             })
             .unwrap_or_default();
-        let s = |k: &str, max: usize| {
-            item.get(k).and_then(|v| v.as_str()).map(|v| clean_text(v, max, k == "notes")).filter(|v| !v.is_empty())
-        };
+        let s =
+            |k: &str, max: usize| item.get(k).and_then(|v| v.as_str()).map(|v| clean_text(v, max, k == "notes")).filter(|v| !v.is_empty());
         let date = match s("date", 20) {
             Some(d) if parse_date(&d).is_some() => Some(d),
             Some(_) => {
@@ -256,14 +255,15 @@ pub fn validate_output(raw: &Value, source_text: &str) -> Vec<SuggestionDraft> {
 
 static ISO_DATE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\b(20\d{2})-(\d{2})-(\d{2})\b").unwrap());
 static MONTH_DAY: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"(?i)\b(jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\.?\s+(\d{1,2})(?:st|nd|rd|th)?(?:,?\s+(20\d{2}))?\b").unwrap()
+    Regex::new(r"(?i)\b(jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\.?\s+(\d{1,2})(?:st|nd|rd|th)?(?:,?\s+(20\d{2}))?\b")
+        .unwrap()
 });
 static DAY_MONTH: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"(?i)\b(\d{1,2})(?:st|nd|rd|th)?\s+(jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\.?(?:\s+(20\d{2}))?\b").unwrap()
+    Regex::new(r"(?i)\b(\d{1,2})(?:st|nd|rd|th)?\s+(jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\.?(?:\s+(20\d{2}))?\b")
+        .unwrap()
 });
-static WEEKDAY: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"(?i)\b(?:on |this |next )?(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b").unwrap()
-});
+static WEEKDAY: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"(?i)\b(?:on |this |next )?(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b").unwrap());
 static RELATIVE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(?i)\b(today|tomorrow)\b").unwrap());
 static TIME_24: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\b([01]?\d|2[0-3])[:.]([0-5]\d)\b").unwrap());
 static TIME_12: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(?i)\b(1[0-2]|0?[1-9])(?::([0-5]\d))?\s*(am|pm)\b").unwrap());
@@ -370,9 +370,15 @@ pub fn heuristic_extract(msg: &UntrustedMessage) -> Vec<SuggestionDraft> {
     let text = format!("{}\n{}", msg.subject, msg.excerpt);
     let lower = text.to_lowercase();
     let today = msg.received_at.date_naive();
-    let kind = if contains_any(&lower, &["appointment", "meeting", "interview", "booking", "reservation", "check-up", "checkup", "dentist", "doctor", "visit"]) {
+    let kind = if contains_any(
+        &lower,
+        &["appointment", "meeting", "interview", "booking", "reservation", "check-up", "checkup", "dentist", "doctor", "visit"],
+    ) {
         SuggestionKind::Appointment
-    } else if contains_any(&lower, &["due", "deadline", "pay by", "payment due", "expires", "renew", "submit by", "last day", "no later than"]) {
+    } else if contains_any(
+        &lower,
+        &["due", "deadline", "pay by", "payment due", "expires", "renew", "submit by", "last day", "no later than"],
+    ) {
         SuggestionKind::Deadline
     } else if contains_any(&lower, &["rsvp", "please reply", "let us know", "please confirm", "get back to", "respond by", "reply by"]) {
         SuggestionKind::FollowUp
@@ -396,7 +402,7 @@ pub fn heuristic_extract(msg: &UntrustedMessage) -> Vec<SuggestionDraft> {
     let title_base = if msg.subject.trim().is_empty() {
         msg.excerpt.split(['.', '\n']).next().unwrap_or("").to_string()
     } else {
-        msg.subject.trim_start_matches(|c: char| c == ' ').to_string()
+        msg.subject.trim_start_matches(' ').to_string()
     };
     let title_base = Regex::new(r"(?i)^(re|fwd?|aw|sv):\s*").unwrap().replace(&title_base, "").into_owned();
     let title = clean_text(&title_base, 100, false);

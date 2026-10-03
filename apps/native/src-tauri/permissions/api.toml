@@ -1,0 +1,4 @@
+[[permission]]
+identifier = "allow-api-request"
+description = "Allows the web UI to call the in-process Tendly API."
+commands.allow = ["api_request"]

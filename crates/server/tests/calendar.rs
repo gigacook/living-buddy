@@ -7,7 +7,10 @@ use common::{Req, TestApp};
 use serde_json::{json, Value};
 
 fn ics(events: &[String]) -> String {
-    format!("BEGIN:VCALENDAR\r\nVERSION:2.0\r\nX-WR-CALNAME:School\r\nX-WR-TIMEZONE:Europe/Stockholm\r\n{}END:VCALENDAR\r\n", events.join(""))
+    format!(
+        "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nX-WR-CALNAME:School\r\nX-WR-TIMEZONE:Europe/Stockholm\r\n{}END:VCALENDAR\r\n",
+        events.join("")
+    )
 }
 
 fn vevent(uid: &str, summary: &str, start: &str, seq: i64, extra: &str) -> String {
@@ -25,7 +28,11 @@ fn stamp(d: chrono::NaiveDate, hm: &str) -> String {
 async fn occurrences(app: &TestApp, actor: &str, query: &str) -> Vec<Value> {
     let from = (Utc::now() - Duration::days(1)).format("%Y-%m-%d");
     let to = (Utc::now() + Duration::days(40)).format("%Y-%m-%d");
-    app.ok(Req::new("GET", format!("/api/calendar/occurrences?from={from}&to={to}&includeTasks=false{query}")).actor(actor)).await.as_array().unwrap().clone()
+    app.ok(Req::new("GET", format!("/api/calendar/occurrences?from={from}&to={to}&includeTasks=false{query}")).actor(actor))
+        .await
+        .as_array()
+        .unwrap()
+        .clone()
 }
 
 #[tokio::test]
@@ -55,15 +62,28 @@ async fn import_reimport_merges_without_duplicates() {
     let rev = ev["revision"].as_u64().unwrap();
     // Feed events cannot be edited directly (no provider write-back)...
     let res = app
-        .send(Req::new("PATCH", format!("/api/calendar/events/{}", ev["id"].as_str().unwrap())).actor(&a).json(json!({"expectedRevision": rev, "event": {"sourceId": sid, "title": "x", "allDay": true, "startDate": "2026-01-01"}})))
+        .send(
+            Req::new("PATCH", format!("/api/calendar/events/{}", ev["id"].as_str().unwrap())).actor(&a).json(
+                json!({"expectedRevision": rev, "event": {"sourceId": sid, "title": "x", "allDay": true, "startDate": "2026-01-01"}}),
+            ),
+        )
         .await;
     assert_eq!(res.status, StatusCode::BAD_REQUEST);
     // ...but accept local overrides.
-    app.ok(Req::new("PATCH", format!("/api/calendar/events/{}", ev["id"].as_str().unwrap())).actor(&a).json(json!({"expectedRevision": rev, "localOverride": {"category": "school", "note": "Bring lunch"}}))).await;
+    app.ok(Req::new("PATCH", format!("/api/calendar/events/{}", ev["id"].as_str().unwrap()))
+        .actor(&a)
+        .json(json!({"expectedRevision": rev, "localOverride": {"category": "school", "note": "Bring lunch"}})))
+        .await;
 
     // v2: lesson moved (sequence 1), meeting removed upstream, trip unchanged.
     let v2 = ics(&[
-        vevent("lesson@example.test", "Piano lesson (new room)", &stamp(d, "1700"), 1, "RRULE:FREQ=WEEKLY;COUNT=4\r\nCATEGORIES:School\r\n"),
+        vevent(
+            "lesson@example.test",
+            "Piano lesson (new room)",
+            &stamp(d, "1700"),
+            1,
+            "RRULE:FREQ=WEEKLY;COUNT=4\r\nCATEGORIES:School\r\n",
+        ),
         vevent("trip@example.test", "Field trip", &stamp(d, "0900"), 0, ""),
     ]);
     let r = app.ok(Req::new("POST", format!("/api/calendar/import?sourceId={sid}")).actor(&a).raw(v2)).await;
@@ -78,7 +98,10 @@ async fn import_reimport_merges_without_duplicates() {
     assert!(trip["description"].as_str().unwrap().contains("Bring lunch"));
 
     // An older sequence never overwrites a newer one.
-    let stale = ics(&[vevent("lesson@example.test", "Piano lesson (old)", &stamp(d, "1600"), 0, "RRULE:FREQ=WEEKLY;COUNT=4\r\n"), vevent("trip@example.test", "Field trip", &stamp(d, "0900"), 0, "")]);
+    let stale = ics(&[
+        vevent("lesson@example.test", "Piano lesson (old)", &stamp(d, "1600"), 0, "RRULE:FREQ=WEEKLY;COUNT=4\r\n"),
+        vevent("trip@example.test", "Field trip", &stamp(d, "0900"), 0, ""),
+    ]);
     app.ok(Req::new("POST", format!("/api/calendar/import?sourceId={sid}")).actor(&a).raw(stale)).await;
     assert!(occurrences(&app, &a, "").await.iter().any(|o| o["title"] == "Piano lesson (new room)"));
 
@@ -102,8 +125,20 @@ async fn merged_sources_dedupe_and_filter_and_never_touch_other_sources() {
     let gid = g["id"].as_str().unwrap();
     let d = base_date();
     let shared = vevent("shared@example.test", "Concert", &stamp(d, "2000"), 2, "");
-    let r1 = app.ok(Req::new("POST", format!("/api/calendar/import?name=Mine&groupId={gid}")).actor(&a).raw(ics(&[shared.clone(), vevent("only1@example.test", "Gym", &stamp(d, "0700"), 0, "CATEGORIES:Personal\r\n")]))).await;
-    let r2 = app.ok(Req::new("POST", "/api/calendar/import?name=Theirs").actor(&a).raw(ics(&[vevent("shared@example.test", "Concert", &stamp(d, "2000"), 1, "")]))).await;
+    let r1 = app
+        .ok(Req::new("POST", format!("/api/calendar/import?name=Mine&groupId={gid}"))
+            .actor(&a)
+            .raw(ics(&[shared.clone(), vevent("only1@example.test", "Gym", &stamp(d, "0700"), 0, "CATEGORIES:Personal\r\n")])))
+        .await;
+    let r2 = app
+        .ok(Req::new("POST", "/api/calendar/import?name=Theirs").actor(&a).raw(ics(&[vevent(
+            "shared@example.test",
+            "Concert",
+            &stamp(d, "2000"),
+            1,
+            "",
+        )])))
+        .await;
     let s1 = r1["source"]["id"].as_str().unwrap();
     let s2 = r2["source"]["id"].as_str().unwrap();
     let occ = occurrences(&app, &a, "").await;
@@ -138,7 +173,8 @@ async fn ics_export_round_trip_with_all_day_recurrence_and_dst() {
         "startDate": start, "startTime": "08:30", "endTime": "09:30", "timezone": "America/New_York", "recurrence": "FREQ=WEEKLY;COUNT=8", "category": "personal"
     }))).await;
     app.ok(Req::new("POST", "/api/calendar/events").actor(&a).json(json!({"sourceId": sid, "title": "Holiday", "allDay": true, "startDate": start, "endDate": (base_date() + Duration::days(2)).format("%Y-%m-%d").to_string()}))).await;
-    let task = app.ok(Req::new("POST", "/api/tasks").actor(&a).json(json!({"title": "Pay rent", "dueDate": start, "timezone": "UTC"}))).await;
+    let task =
+        app.ok(Req::new("POST", "/api/tasks").actor(&a).json(json!({"title": "Pay rent", "dueDate": start, "timezone": "UTC"}))).await;
 
     let from = Utc::now().format("%Y-%m-%d");
     let to = (Utc::now() + Duration::days(120)).format("%Y-%m-%d");
@@ -157,7 +193,17 @@ async fn ics_export_round_trip_with_all_day_recurrence_and_dst() {
     assert_eq!(yoga.description.as_deref(), Some("Line one\nLine two"));
     assert!(yoga.dtstamp.is_some() && yoga.last_modified.is_some());
     // 8 weekly occurrences that cross the November DST change keep 08:30 local time.
-    let (occ, _) = tendly_core::ics::expand_occurrences(&yoga.start, &yoga.effective_end(), yoga.rrule.as_deref(), &yoga.exdates, &[], chrono_tz::Tz::UTC, Utc::now() - Duration::days(1), Utc::now() + Duration::days(120), 100);
+    let (occ, _) = tendly_core::ics::expand_occurrences(
+        &yoga.start,
+        &yoga.effective_end(),
+        yoga.rrule.as_deref(),
+        &yoga.exdates,
+        &[],
+        chrono_tz::Tz::UTC,
+        Utc::now() - Duration::days(1),
+        Utc::now() + Duration::days(120),
+        100,
+    );
     assert_eq!(occ.len(), 8);
     for o in &occ {
         assert_eq!(o.start.local().format("%H:%M").to_string(), "08:30");
@@ -165,7 +211,8 @@ async fn ics_export_round_trip_with_all_day_recurrence_and_dst() {
     let holiday = parsed.events.iter().find(|e| e.summary == "Holiday").unwrap();
     assert!(holiday.start.is_date());
     // DTEND is exclusive: a 3-day holiday ends the day after its last day.
-    if let (tendly_core::ics::IcsTime::Date { date: s }, Some(tendly_core::ics::IcsTime::Date { date: e })) = (&holiday.start, &holiday.end) {
+    if let (tendly_core::ics::IcsTime::Date { date: s }, Some(tendly_core::ics::IcsTime::Date { date: e })) = (&holiday.start, &holiday.end)
+    {
         assert_eq!((*e - *s).num_days(), 3);
     } else {
         panic!("holiday should be all-day");
@@ -173,7 +220,9 @@ async fn ics_export_round_trip_with_all_day_recurrence_and_dst() {
     // Re-importing our own export creates no duplicates of its events.
     let r = app.ok(Req::new("POST", "/api/calendar/import?name=Roundtrip").actor(&a).raw(text.clone())).await;
     assert_eq!(r["inserted"], 3);
-    let r = app.ok(Req::new("POST", format!("/api/calendar/import?sourceId={}", r["source"]["id"].as_str().unwrap())).actor(&a).raw(text)).await;
+    let r = app
+        .ok(Req::new("POST", format!("/api/calendar/import?sourceId={}", r["source"]["id"].as_str().unwrap())).actor(&a).raw(text))
+        .await;
     assert_eq!(r["unchanged"], 3);
 
     let j = app.ok(Req::new("GET", format!("/api/calendar/export.json?from={from}&to={to}")).actor(&a)).await;
@@ -190,21 +239,33 @@ async fn hostile_calendar_input_is_rejected_or_neutralized() {
     let res = app.send(Req::new("POST", "/api/calendar/import").actor(&a).raw(big)).await;
     assert_eq!(res.status, StatusCode::PAYLOAD_TOO_LARGE);
     // Subscribing to internal addresses is refused (SSRF protection).
-    for url in ["http://169.254.169.254/latest/meta-data/", "http://127.0.0.1:7878/api/admin/export", "file:///etc/passwd", "http://[::1]/x.ics"] {
+    for url in
+        ["http://169.254.169.254/latest/meta-data/", "http://127.0.0.1:7878/api/admin/export", "file:///etc/passwd", "http://[::1]/x.ics"]
+    {
         let res = app.send(Req::new("POST", "/api/calendar/sources").actor(&a).json(json!({"name": "x", "kind": "url", "url": url}))).await;
         if res.status == StatusCode::OK {
             assert_eq!(res.body["lastStatus"], "error", "{url}");
             assert!(res.body["lastError"].as_str().unwrap().contains("private or internal"), "{url}");
-            assert_eq!(res.body["urlDisplay"].as_str().unwrap().contains("meta-data"), false);
+            assert!(!res.body["urlDisplay"].as_str().unwrap().contains("meta-data"));
         } else {
             assert_eq!(res.status, StatusCode::BAD_REQUEST, "{url}");
         }
     }
     // Script in event text stays inert in share HTML.
     app.enable_sharing(&a).await;
-    let src = app.ok(Req::new("POST", "/api/calendar/import?name=Evil").actor(&a).raw(ics(&[vevent("x@test", "<script>alert(1)</script>", &stamp(base_date(), "1000"), 0, "DESCRIPTION:<img src=x onerror=alert(1)>\r\n")]))).await;
+    let src = app
+        .ok(Req::new("POST", "/api/calendar/import?name=Evil").actor(&a).raw(ics(&[vevent(
+            "x@test",
+            "<script>alert(1)</script>",
+            &stamp(base_date(), "1000"),
+            0,
+            "DESCRIPTION:<img src=x onerror=alert(1)>\r\n",
+        )])))
+        .await;
     let link = app
-        .ok(Req::new("POST", "/api/shares").actor(&a).json(json!({"label": "x", "scope": {"sourceIds": [src["source"]["id"]], "detail": "full", "daysAhead": 30}})))
+        .ok(Req::new("POST", "/api/shares")
+            .actor(&a)
+            .json(json!({"label": "x", "scope": {"sourceIds": [src["source"]["id"]], "detail": "full", "daysAhead": 30}})))
         .await;
     let html = app.send(Req::new("GET", link["htmlPath"].as_str().unwrap()).no_csrf()).await;
     assert!(!html.text.contains("<script>alert"));
@@ -220,10 +281,29 @@ async fn share_links_are_scoped_revocable_and_off_by_default() {
     let g = app.group(&a, "Home", "household", &[&a, &b]).await;
     let gid = g["id"].as_str().unwrap();
     let start = base_date().format("%Y-%m-%d").to_string();
-    app.ok(Req::new("POST", "/api/tasks").actor(&a).json(json!({"title": "Shared chore", "groupId": gid, "dueDate": start, "notes": "door code 1234"}))).await;
+    app.ok(Req::new("POST", "/api/tasks")
+        .actor(&a)
+        .json(json!({"title": "Shared chore", "groupId": gid, "dueDate": start, "notes": "door code 1234"})))
+        .await;
     app.ok(Req::new("POST", "/api/tasks").actor(&a).json(json!({"title": "Private therapy", "dueDate": start}))).await;
-    let private_src = app.ok(Req::new("POST", "/api/calendar/import?name=Private").actor(&a).raw(ics(&[vevent("p@test", "Private appointment", &stamp(base_date(), "1000"), 0, "")]))).await;
-    let group_src = app.ok(Req::new("POST", format!("/api/calendar/import?name=Family&groupId={gid}&isPrivate=false")).actor(&a).raw(ics(&[vevent("f@test", "Family dinner", &stamp(base_date(), "1800"), 0, "LOCATION:Grandma's\r\n")]))).await;
+    let private_src = app
+        .ok(Req::new("POST", "/api/calendar/import?name=Private").actor(&a).raw(ics(&[vevent(
+            "p@test",
+            "Private appointment",
+            &stamp(base_date(), "1000"),
+            0,
+            "",
+        )])))
+        .await;
+    let group_src = app
+        .ok(Req::new("POST", format!("/api/calendar/import?name=Family&groupId={gid}&isPrivate=false")).actor(&a).raw(ics(&[vevent(
+            "f@test",
+            "Family dinner",
+            &stamp(base_date(), "1800"),
+            0,
+            "LOCATION:Grandma's\r\n",
+        )])))
+        .await;
     let _ = private_src;
     let _ = group_src;
 
@@ -234,7 +314,13 @@ async fn share_links_are_scoped_revocable_and_off_by_default() {
     let outsider = app.member("Robin").await;
     let res = app.send(Req::new("POST", "/api/shares").actor(&outsider).json(json!({"label": "x", "scope": scope}))).await;
     assert_eq!(res.status, StatusCode::FORBIDDEN, "must be in the group to share it");
-    let res = app.send(Req::new("POST", "/api/shares").actor(&a).json(json!({"label": "x", "scope": {"includePersonal": true, "memberIds": [b], "daysAhead": 30}}))).await;
+    let res = app
+        .send(
+            Req::new("POST", "/api/shares")
+                .actor(&a)
+                .json(json!({"label": "x", "scope": {"includePersonal": true, "memberIds": [b], "daysAhead": 30}})),
+        )
+        .await;
     assert_eq!(res.status, StatusCode::FORBIDDEN, "cannot share someone else's personal tasks");
 
     let link = app.ok(Req::new("POST", "/api/shares").actor(&a).json(json!({"label": "Family", "scope": scope}))).await;
@@ -257,7 +343,11 @@ async fn share_links_are_scoped_revocable_and_off_by_default() {
     assert!(ics_res.text.contains("SUMMARY:Family dinner") && !ics_res.text.contains("Private"));
 
     // Busy-only links reveal nothing but time blocks.
-    let busy = app.ok(Req::new("POST", "/api/shares").actor(&a).json(json!({"label": "Busy", "scope": {"groupIds": [gid], "detail": "busy_only", "daysAhead": 30}}))).await;
+    let busy = app
+        .ok(Req::new("POST", "/api/shares")
+            .actor(&a)
+            .json(json!({"label": "Busy", "scope": {"groupIds": [gid], "detail": "busy_only", "daysAhead": 30}})))
+        .await;
     let bj = app.send(Req::new("GET", busy["jsonPath"].as_str().unwrap()).no_csrf()).await;
     assert!(bj.body["items"].as_array().unwrap().iter().all(|i| i["title"] == "Busy"));
     assert!(!bj.text.contains("f@test"));
@@ -282,7 +372,15 @@ async fn private_sources_are_invisible_to_others() {
     let app = TestApp::new().await;
     let a = app.member("Alex").await;
     let b = app.member("Sam").await;
-    let r = app.ok(Req::new("POST", "/api/calendar/import?name=Mine").actor(&a).raw(ics(&[vevent("m@test", "Therapy", &stamp(base_date(), "1000"), 0, "")]))).await;
+    let r = app
+        .ok(Req::new("POST", "/api/calendar/import?name=Mine").actor(&a).raw(ics(&[vevent(
+            "m@test",
+            "Therapy",
+            &stamp(base_date(), "1000"),
+            0,
+            "",
+        )])))
+        .await;
     let sid = r["source"]["id"].as_str().unwrap();
     assert!(occurrences(&app, &b, "").await.is_empty());
     let srcs = app.ok(Req::new("GET", "/api/calendar/sources").actor(&b)).await;

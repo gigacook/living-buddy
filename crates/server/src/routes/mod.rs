@@ -38,9 +38,7 @@ pub fn api(state: AppState) -> Router {
         .route("/api/admin/devices/{id}/revoke", post(admin::revoke_device))
         .route("/api/admin/export", get(admin::export));
 
-    let import = Router::new()
-        .route("/api/calendar/import", post(calendar::import))
-        .layer(DefaultBodyLimit::max(6 * 1024 * 1024));
+    let import = Router::new().route("/api/calendar/import", post(calendar::import)).layer(DefaultBodyLimit::max(6 * 1024 * 1024));
 
     Router::new()
         .route("/healthz", get(session::healthz))

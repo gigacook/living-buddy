@@ -13,14 +13,16 @@ use axum::response::{IntoResponse, Redirect};
 use axum::Json;
 use serde::Deserialize;
 use serde_json::{json, Value};
-use tendly_core::api::{AdminSettings, AdminSettingsInput, AiSettings, AiSettingsInput, Connector, ConnectorInput, ConnectorPatch, ProviderInfo};
+use tendly_core::api::{
+    AdminSettings, AdminSettingsInput, AiSettings, AiSettingsInput, Connector, ConnectorInput, ConnectorPatch, ProviderInfo,
+};
 use tendly_core::share::hash_token;
 
 pub async fn get_settings(State(state): State<AppState>) -> AppResult<Json<AdminSettings>> {
     let c = &state.config;
     Ok(Json(AdminSettings {
         sharing_enabled: crate::routes::session::sharing_enabled(&state).await,
-        mode: c.mode.clone(),
+        mode: c.mode,
         bind: c.bind.to_string(),
         allowed_networks: c.allowed_networks.iter().map(|n| n.to_string()).collect(),
         data_dir_display: c.data_dir.display().to_string(),
@@ -28,14 +30,31 @@ pub async fn get_settings(State(state): State<AppState>) -> AppResult<Json<Admin
     }))
 }
 
-pub async fn patch_settings(State(state): State<AppState>, actor: Actor, Json(p): Json<AdminSettingsInput>) -> AppResult<Json<AdminSettings>> {
+pub async fn patch_settings(
+    State(state): State<AppState>,
+    actor: Actor,
+    Json(p): Json<AdminSettingsInput>,
+) -> AppResult<Json<AdminSettings>> {
     if let Some(v) = p.sharing_enabled {
         set_setting(&state.db, "sharing_enabled", if v { "true" } else { "false" }).await?;
         let mut conn = state.db.acquire().await?;
-        crate::activity::record(&mut conn, &ts(state.now()), crate::activity::NewActivity {
-            actor: Some(&actor), source: "admin", entity_type: "share", entity_id: "settings", group_id: None, op: if v { "enable_sharing" } else { "disable_sharing" },
-            summary: format!("{} turned sharing {}", actor.name, if v { "on" } else { "off (all links stop working)" }), revision: 0, before: None, after: None,
-        }).await?;
+        crate::activity::record(
+            &mut conn,
+            &ts(state.now()),
+            crate::activity::NewActivity {
+                actor: Some(&actor),
+                source: "admin",
+                entity_type: "share",
+                entity_id: "settings",
+                group_id: None,
+                op: if v { "enable_sharing" } else { "disable_sharing" },
+                summary: format!("{} turned sharing {}", actor.name, if v { "on" } else { "off (all links stop working)" }),
+                revision: 0,
+                before: None,
+                after: None,
+            },
+        )
+        .await?;
     }
     get_settings(State(state)).await
 }
@@ -118,22 +137,39 @@ pub async fn create_connector(State(state): State<AppState>, actor: Actor, Json(
     Ok(Json(load(&state, &id).await?.to_api()))
 }
 
-pub async fn patch_connector(State(state): State<AppState>, Path(id): Path<String>, Json(p): Json<ConnectorPatch>) -> AppResult<Json<Connector>> {
+pub async fn patch_connector(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    Json(p): Json<ConnectorPatch>,
+) -> AppResult<Json<Connector>> {
     let row = load(&state, &id).await?;
     let now = ts(state.now());
     if let Some(n) = &p.display_name {
-        sqlx::query("UPDATE connectors SET display_name = ? WHERE id = ?").bind(validate::title("displayName", n, 60)?).bind(&id).execute(&state.db).await?;
+        sqlx::query("UPDATE connectors SET display_name = ? WHERE id = ?")
+            .bind(validate::title("displayName", n, 60)?)
+            .bind(&id)
+            .execute(&state.db)
+            .await?;
     }
     if let Some(e) = p.enabled {
         // Re-enabling clears error states so the scheduler picks it up again.
         let status = if e && row.status == "error" { "never_run" } else { row.status.as_str() };
-        sqlx::query("UPDATE connectors SET enabled = ?, status = ?, consecutive_failures = 0 WHERE id = ?").bind(e as i64).bind(status).bind(&id).execute(&state.db).await?;
+        sqlx::query("UPDATE connectors SET enabled = ?, status = ?, consecutive_failures = 0 WHERE id = ?")
+            .bind(e as i64)
+            .bind(status)
+            .bind(&id)
+            .execute(&state.db)
+            .await?;
     }
     if let Some(a) = p.ai_consent {
         sqlx::query("UPDATE connectors SET ai_consent = ? WHERE id = ?").bind(a as i64).bind(&id).execute(&state.db).await?;
     }
     if let Some(r) = p.retention_days {
-        sqlx::query("UPDATE connectors SET retention_days = ? WHERE id = ?").bind(r.clamp(1, 365) as i64).bind(&id).execute(&state.db).await?;
+        sqlx::query("UPDATE connectors SET retention_days = ? WHERE id = ?")
+            .bind(r.clamp(1, 365) as i64)
+            .bind(&id)
+            .execute(&state.db)
+            .await?;
     }
     sqlx::query("UPDATE connectors SET updated_at = ? WHERE id = ?").bind(&now).bind(&id).execute(&state.db).await?;
     Ok(Json(load(&state, &id).await?.to_api()))
@@ -178,7 +214,11 @@ pub struct TokenInput {
 }
 
 /// For providers that use a pasted token (Slack bot token). Stored encrypted.
-pub async fn set_credentials(State(state): State<AppState>, Path(id): Path<String>, Json(i): Json<TokenInput>) -> AppResult<Json<Connector>> {
+pub async fn set_credentials(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    Json(i): Json<TokenInput>,
+) -> AppResult<Json<Connector>> {
     let row = load(&state, &id).await?;
     if row.provider != "slack" {
         return Err(AppError::bad("This provider connects with OAuth instead."));
@@ -212,7 +252,11 @@ fn redirect_uri(state: &AppState) -> String {
     format!("{}/api/admin/oauth/callback", base.trim_end_matches('/'))
 }
 
-pub async fn oauth_start(State(state): State<AppState>, Path(provider): Path<String>, Query(q): Query<OAuthStartQuery>) -> AppResult<Json<Value>> {
+pub async fn oauth_start(
+    State(state): State<AppState>,
+    Path(provider): Path<String>,
+    Query(q): Query<OAuthStartQuery>,
+) -> AppResult<Json<Value>> {
     let row = load(&state, &q.connector_id).await?;
     if row.provider != provider {
         return Err(AppError::bad("Provider mismatch."));
@@ -231,7 +275,11 @@ pub async fn oauth_start(State(state): State<AppState>, Path(provider): Path<Str
     let enc = |s: &str| -> String { url::form_urlencoded::byte_serialize(s.as_bytes()).collect() };
     let url = match provider.as_str() {
         "gmail" => {
-            let id = cfg.oauth.google_client_id.clone().ok_or_else(|| AppError::bad("Set TENDLY_GOOGLE_CLIENT_ID and TENDLY_GOOGLE_CLIENT_SECRET on the server first."))?;
+            let id = cfg
+                .oauth
+                .google_client_id
+                .clone()
+                .ok_or_else(|| AppError::bad("Set TENDLY_GOOGLE_CLIENT_ID and TENDLY_GOOGLE_CLIENT_SECRET on the server first."))?;
             format!(
                 "{}?client_id={}&redirect_uri={}&response_type=code&scope={}&access_type=offline&prompt=consent&state={}&code_challenge={}&code_challenge_method=S256",
                 cfg.provider_base_overrides.google_auth,
@@ -243,7 +291,10 @@ pub async fn oauth_start(State(state): State<AppState>, Path(provider): Path<Str
             )
         }
         "microsoft_graph" => {
-            let id = cfg.oauth.microsoft_client_id.clone().ok_or_else(|| AppError::bad("Set TENDLY_MICROSOFT_CLIENT_ID and TENDLY_MICROSOFT_CLIENT_SECRET on the server first."))?;
+            let id =
+                cfg.oauth.microsoft_client_id.clone().ok_or_else(|| {
+                    AppError::bad("Set TENDLY_MICROSOFT_CLIENT_ID and TENDLY_MICROSOFT_CLIENT_SECRET on the server first.")
+                })?;
             format!(
                 "{}/{}/oauth2/v2.0/authorize?client_id={}&redirect_uri={}&response_type=code&scope={}&state={}&code_challenge={}&code_challenge_method=S256",
                 cfg.provider_base_overrides.microsoft_login,
@@ -272,10 +323,11 @@ pub async fn oauth_callback(State(state): State<AppState>, Query(q): Query<OAuth
         return Ok(Redirect::to("/settings?connector=denied"));
     }
     let (Some(st), Some(code)) = (q.state, q.code) else { return Err(AppError::bad("Missing OAuth parameters.")) };
-    let row: Option<(String, String, String)> = sqlx::query_as("DELETE FROM oauth_states WHERE state_hash = ? RETURNING connector_id, verifier_ciphertext, created_at")
-        .bind(hash_token(&st))
-        .fetch_optional(&state.db)
-        .await?;
+    let row: Option<(String, String, String)> =
+        sqlx::query_as("DELETE FROM oauth_states WHERE state_hash = ? RETURNING connector_id, verifier_ciphertext, created_at")
+            .bind(hash_token(&st))
+            .fetch_optional(&state.db)
+            .await?;
     let (connector_id, verifier_ct, created) = row.ok_or(AppError::bad("This sign-in link expired. Start again."))?;
     if crate::db::parse_ts(&created) < state.now() - chrono::Duration::minutes(15) {
         return Err(AppError::bad("This sign-in link expired. Start again."));
@@ -284,7 +336,9 @@ pub async fn oauth_callback(State(state): State<AppState>, Query(q): Query<OAuth
     let c = load(&state, &connector_id).await?;
     let cfg = &state.config;
     let (url, id, secret) = match c.provider.as_str() {
-        "gmail" => (cfg.provider_base_overrides.google_token.clone(), cfg.oauth.google_client_id.clone(), cfg.oauth.google_client_secret.clone()),
+        "gmail" => {
+            (cfg.provider_base_overrides.google_token.clone(), cfg.oauth.google_client_id.clone(), cfg.oauth.google_client_secret.clone())
+        }
         _ => (
             format!("{}/{}/oauth2/v2.0/token", cfg.provider_base_overrides.microsoft_login, cfg.oauth.microsoft_tenant),
             cfg.oauth.microsoft_client_id.clone(),
@@ -323,7 +377,9 @@ pub async fn oauth_callback(State(state): State<AppState>, Query(q): Query<OAuth
 
 pub async fn jobs(State(state): State<AppState>) -> AppResult<Json<Vec<Value>>> {
     let rows: Vec<(String, String, String, i64, String, Option<String>, String)> =
-        sqlx::query_as("SELECT id, kind, status, attempts, run_after, last_error, updated_at FROM jobs ORDER BY updated_at DESC LIMIT 50").fetch_all(&state.db).await?;
+        sqlx::query_as("SELECT id, kind, status, attempts, run_after, last_error, updated_at FROM jobs ORDER BY updated_at DESC LIMIT 50")
+            .fetch_all(&state.db)
+            .await?;
     Ok(Json(
         rows.into_iter()
             .map(|(id, kind, status, attempts, run_after, err, updated)| json!({"id": id, "kind": kind, "status": status, "attempts": attempts, "runAfter": run_after, "lastError": err, "updatedAt": updated}))
@@ -358,12 +414,22 @@ pub async fn create_device_token(state: &AppState, name: &str) -> anyhow::Result
 
 pub async fn list_devices(State(state): State<AppState>) -> AppResult<Json<Vec<Value>>> {
     let rows: Vec<(String, String, String, Option<String>, Option<String>)> =
-        sqlx::query_as("SELECT id, name, created_at, last_seen_at, revoked_at FROM devices ORDER BY created_at DESC").fetch_all(&state.db).await?;
-    Ok(Json(rows.into_iter().map(|(id, name, c, s, r)| json!({"id": id, "name": name, "createdAt": c, "lastSeenAt": s, "revokedAt": r})).collect()))
+        sqlx::query_as("SELECT id, name, created_at, last_seen_at, revoked_at FROM devices ORDER BY created_at DESC")
+            .fetch_all(&state.db)
+            .await?;
+    Ok(Json(
+        rows.into_iter()
+            .map(|(id, name, c, s, r)| json!({"id": id, "name": name, "createdAt": c, "lastSeenAt": s, "revokedAt": r}))
+            .collect(),
+    ))
 }
 
 pub async fn revoke_device(State(state): State<AppState>, Path(id): Path<String>) -> AppResult<Json<Value>> {
-    sqlx::query("UPDATE devices SET revoked_at = COALESCE(revoked_at, ?) WHERE id = ?").bind(ts(state.now())).bind(&id).execute(&state.db).await?;
+    sqlx::query("UPDATE devices SET revoked_at = COALESCE(revoked_at, ?) WHERE id = ?")
+        .bind(ts(state.now()))
+        .bind(&id)
+        .execute(&state.db)
+        .await?;
     Ok(Json(json!({"revoked": true})))
 }
 
@@ -380,7 +446,12 @@ pub async fn ai_test(State(state): State<AppState>) -> AppResult<Json<Value>> {
     if !provider.is_configured() {
         return Err(AppError::bad("No AI provider is configured."));
     }
-    let msg = tendly_core::extraction::minimize("Dentist appointment", "Reminder: your dentist appointment is on 2026-11-02 at 14:30.", state.now(), 500);
+    let msg = tendly_core::extraction::minimize(
+        "Dentist appointment",
+        "Reminder: your dentist appointment is on 2026-11-02 at 14:30.",
+        state.now(),
+        500,
+    );
     match crate::ai::extract(&state, &provider, &msg).await {
         Ok(d) => Ok(Json(json!({"ok": true, "suggestions": d.len()}))),
         Err(e) => Ok(Json(json!({"ok": false, "error": tendly_core::redact::redact(&e.to_string())}))),

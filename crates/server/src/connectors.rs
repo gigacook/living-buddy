@@ -215,7 +215,9 @@ async fn ensure_token(state: &AppState, row: &ConnectorRow, force: bool) -> Resu
     let refresh = creds.refresh_token.clone().ok_or_else(|| ConnectorError::NeedsAuth("no refresh token".into()))?;
     let cfg = &state.config;
     let (url, client_id, client_secret) = match row.provider.as_str() {
-        "gmail" => (cfg.provider_base_overrides.google_token.clone(), cfg.oauth.google_client_id.clone(), cfg.oauth.google_client_secret.clone()),
+        "gmail" => {
+            (cfg.provider_base_overrides.google_token.clone(), cfg.oauth.google_client_id.clone(), cfg.oauth.google_client_secret.clone())
+        }
         "microsoft_graph" => (
             format!("{}/{}/oauth2/v2.0/token", cfg.provider_base_overrides.microsoft_login, cfg.oauth.microsoft_tenant),
             cfg.oauth.microsoft_client_id.clone(),
@@ -229,7 +231,12 @@ async fn ensure_token(state: &AppState, row: &ConnectorRow, force: bool) -> Resu
     let resp = state
         .http
         .post(url)
-        .form(&[("grant_type", "refresh_token"), ("refresh_token", refresh.as_str()), ("client_id", id.as_str()), ("client_secret", secret.as_str())])
+        .form(&[
+            ("grant_type", "refresh_token"),
+            ("refresh_token", refresh.as_str()),
+            ("client_id", id.as_str()),
+            ("client_secret", secret.as_str()),
+        ])
         .send()
         .await
         .map_err(|_| ConnectorError::Transient("token refresh failed".into()))?;
@@ -309,7 +316,8 @@ fn sync_fixture(state: &AppState, row: &ConnectorRow) -> Result<SyncResult, Conn
             continue;
         }
         let text = std::fs::read_to_string(&f).map_err(|e| ConnectorError::Transient(e.to_string()))?;
-        let msg: FixtureMessage = serde_json::from_str(&text).map_err(|_| ConnectorError::Permanent(format!("Fixture {name} is malformed.")))?;
+        let msg: FixtureMessage =
+            serde_json::from_str(&text).map_err(|_| ConnectorError::Permanent(format!("Fixture {name} is malformed.")))?;
         items.push(FetchedItem { external_id: msg.id, subject: msg.subject, body: msg.body, received_at: msg.received_at });
         cursor = Some(name);
         if items.len() >= 50 {
@@ -327,7 +335,9 @@ async fn sync_gmail(state: &AppState, cursor: Option<String>, token: String) -> 
     let mut new_cursor = cursor.clone();
     let mut need_initial = cursor.is_none();
     if let Some(c) = &cursor {
-        match get_json(state, &format!("{base}/history?startHistoryId={}&historyTypes=messageAdded&maxResults=100", urlencode(c)), &token).await {
+        match get_json(state, &format!("{base}/history?startHistoryId={}&historyTypes=messageAdded&maxResults=100", urlencode(c)), &token)
+            .await
+        {
             Ok(v) => {
                 for h in v.get("history").and_then(|h| h.as_array()).into_iter().flatten() {
                     for m in h.get("messagesAdded").and_then(|m| m.as_array()).into_iter().flatten() {
@@ -336,7 +346,10 @@ async fn sync_gmail(state: &AppState, cursor: Option<String>, token: String) -> 
                         }
                     }
                 }
-                new_cursor = v.get("historyId").and_then(|h| h.as_str().map(String::from).or_else(|| h.as_u64().map(|n| n.to_string()))).or(new_cursor);
+                new_cursor = v
+                    .get("historyId")
+                    .and_then(|h| h.as_str().map(String::from).or_else(|| h.as_u64().map(|n| n.to_string())))
+                    .or(new_cursor);
             }
             // An expired history id means a fresh, bounded resync.
             Err(ConnectorError::Permanent(m)) if m.contains("404") => need_initial = true,
@@ -344,8 +357,19 @@ async fn sync_gmail(state: &AppState, cursor: Option<String>, token: String) -> 
         }
     }
     if need_initial {
-        let list = get_json(state, &format!("{base}/messages?maxResults=20&q={}", urlencode("newer_than:3d -category:promotions -category:social")), &token).await?;
-        ids = list.get("messages").and_then(|m| m.as_array()).into_iter().flatten().filter_map(|m| m.get("id").and_then(|i| i.as_str()).map(String::from)).collect();
+        let list = get_json(
+            state,
+            &format!("{base}/messages?maxResults=20&q={}", urlencode("newer_than:3d -category:promotions -category:social")),
+            &token,
+        )
+        .await?;
+        ids = list
+            .get("messages")
+            .and_then(|m| m.as_array())
+            .into_iter()
+            .flatten()
+            .filter_map(|m| m.get("id").and_then(|i| i.as_str()).map(String::from))
+            .collect();
         let profile = get_json(state, &format!("{base}/profile"), &token).await?;
         new_cursor = profile.get("historyId").and_then(|h| h.as_str().map(String::from).or_else(|| h.as_u64().map(|n| n.to_string())));
     }
@@ -356,7 +380,9 @@ async fn sync_gmail(state: &AppState, cursor: Option<String>, token: String) -> 
         let subject = m
             .pointer("/payload/headers")
             .and_then(|h| h.as_array())
-            .and_then(|hs| hs.iter().find(|h| h.get("name").and_then(|n| n.as_str()).map(|n| n.eq_ignore_ascii_case("subject")).unwrap_or(false)))
+            .and_then(|hs| {
+                hs.iter().find(|h| h.get("name").and_then(|n| n.as_str()).map(|n| n.eq_ignore_ascii_case("subject")).unwrap_or(false))
+            })
             .and_then(|h| h.get("value"))
             .and_then(|v| v.as_str())
             .unwrap_or("")
@@ -398,7 +424,12 @@ async fn sync_graph(state: &AppState, cursor: Option<String>, token: String) -> 
                 external_id: id.to_string(),
                 subject: m.get("subject").and_then(|s| s.as_str()).unwrap_or("").to_string(),
                 body: m.get("bodyPreview").and_then(|s| s.as_str()).unwrap_or("").to_string(),
-                received_at: m.get("receivedDateTime").and_then(|d| d.as_str()).map(parse_ts).filter(|d| *d > DateTime::<Utc>::MIN_UTC).unwrap_or_else(|| state.now()),
+                received_at: m
+                    .get("receivedDateTime")
+                    .and_then(|d| d.as_str())
+                    .map(parse_ts)
+                    .filter(|d| *d > DateTime::<Utc>::MIN_UTC)
+                    .unwrap_or_else(|| state.now()),
             });
         }
         if let Some(next) = v.get("@odata.nextLink").and_then(|n| n.as_str()) {
@@ -431,7 +462,14 @@ async fn sync_slack(state: &AppState, row: &ConnectorRow) -> Result<SyncResult, 
         .settings_json()
         .get("channels")
         .and_then(|c| c.as_array())
-        .map(|a| a.iter().filter_map(|c| c.as_str()).filter(|c| c.chars().all(|x| x.is_ascii_alphanumeric())).map(String::from).take(20).collect())
+        .map(|a| {
+            a.iter()
+                .filter_map(|c| c.as_str())
+                .filter(|c| c.chars().all(|x| x.is_ascii_alphanumeric()))
+                .map(String::from)
+                .take(20)
+                .collect()
+        })
         .unwrap_or_default();
     if channels.is_empty() {
         return Err(ConnectorError::Permanent("List at least one channel id in the connector settings.".into()));
@@ -441,7 +479,8 @@ async fn sync_slack(state: &AppState, row: &ConnectorRow) -> Result<SyncResult, 
     let mut items = Vec::new();
     for ch in channels {
         let oldest = cursors.get(&ch).and_then(|v| v.as_str()).unwrap_or("0").to_string();
-        let v = get_json(state, &format!("{base}/conversations.history?channel={ch}&oldest={}&limit=50", urlencode(&oldest)), &token).await?;
+        let v =
+            get_json(state, &format!("{base}/conversations.history?channel={ch}&oldest={}&limit=50", urlencode(&oldest)), &token).await?;
         if v.get("ok").and_then(|o| o.as_bool()) != Some(true) {
             let err = v.get("error").and_then(|e| e.as_str()).unwrap_or("unknown");
             return Err(match err {
@@ -536,13 +575,20 @@ pub async fn ingest(state: &AppState, row: &ConnectorRow, items: &[FetchedItem])
                 .await?;
         }
     }
-    sqlx::query("UPDATE connectors SET items_ingested = items_ingested + ? WHERE id = ?").bind(new_items as i64).bind(&row.id).execute(&state.db).await?;
+    sqlx::query("UPDATE connectors SET items_ingested = items_ingested + ? WHERE id = ?")
+        .bind(new_items as i64)
+        .bind(&row.id)
+        .execute(&state.db)
+        .await?;
     Ok(new_items)
 }
 
 /// One full sync: fetch, ingest, then advance the cursor (only after ingest succeeds).
 pub async fn run_sync(state: &AppState, connector_id: &str) -> Result<(), ConnectorError> {
-    let row = load(state, connector_id).await.map_err(|e| ConnectorError::Transient(e.to_string()))?.ok_or_else(|| ConnectorError::Permanent("connector removed".into()))?;
+    let row = load(state, connector_id)
+        .await
+        .map_err(|e| ConnectorError::Transient(e.to_string()))?
+        .ok_or_else(|| ConnectorError::Permanent("connector removed".into()))?;
     if row.enabled == 0 {
         return Ok(());
     }
@@ -585,7 +631,11 @@ pub async fn run_sync(state: &AppState, connector_id: &str) -> Result<(), Connec
 pub async fn apply_retention(state: &AppState) -> Result<(u64, u64)> {
     let now = ts(state.now());
     let items = sqlx::query("DELETE FROM ingested_items WHERE purge_after <= ?").bind(&now).execute(&state.db).await?.rows_affected();
-    let sugg = sqlx::query("DELETE FROM suggestions WHERE purge_after <= ? AND status != 'pending'").bind(&now).execute(&state.db).await?.rows_affected();
+    let sugg = sqlx::query("DELETE FROM suggestions WHERE purge_after <= ? AND status != 'pending'")
+        .bind(&now)
+        .execute(&state.db)
+        .await?
+        .rows_affected();
     Ok((items, sugg))
 }
 

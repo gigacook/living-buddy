@@ -13,7 +13,9 @@ static RULES: LazyLock<Vec<(Regex, &'static str)>> = LazyLock::new(|| {
         (r(r"(?i)\bbearer\s+[A-Za-z0-9._\-~+/=]{8,}"), "Bearer [redacted]"),
         // Key=value style secrets in query strings, JSON and env dumps.
         (
-            r(r#"(?i)("?(?:access_token|refresh_token|id_token|client_secret|api[_-]?key|password|passwd|secret|token|code|cookie|session)"?\s*[:=]\s*"?)[^"&\s,;}]+"#),
+            r(
+                r#"(?i)("?(?:access_token|refresh_token|id_token|client_secret|api[_-]?key|password|passwd|secret|token|code|cookie|session)"?\s*[:=]\s*"?)[^"&\s,;}]+"#,
+            ),
             "${1}[redacted]",
         ),
         // Provider key formats.

@@ -14,9 +14,7 @@ use chrono_tz::Tz;
 use serde::Deserialize;
 use serde_json::{json, Map, Value};
 use sqlx::SqliteConnection;
-use tendly_core::api::{
-    CompleteTaskResult, MoveTaskInput, Subtask, Task, TaskCompletion, TaskHistory, TaskInput, TaskPatch,
-};
+use tendly_core::api::{CompleteTaskResult, MoveTaskInput, Subtask, Task, TaskCompletion, TaskHistory, TaskInput, TaskPatch};
 use tendly_core::model::{Category, GroupMode, Priority, RepeatMode, DONE_COLUMN};
 use tendly_core::recurrence::{resolve_local, RRule};
 use tendly_core::rotation::next_assignee;
@@ -159,7 +157,10 @@ async fn validate_assignee(conn: &mut SqliteConnection, group_id: Option<&str>, 
         }
         None => {
             if a != owner {
-                return Err(AppError::field("assigneeId", "Personal tasks can only be assigned to their owner. Put it in a group to share it."));
+                return Err(AppError::field(
+                    "assigneeId",
+                    "Personal tasks can only be assigned to their owner. Put it in a group to share it.",
+                ));
             }
         }
     }
@@ -329,14 +330,21 @@ pub async fn create_task(state: &AppState, actor: &Actor, input: TaskInput, sour
         }
     }
     if let Some(m) = &input.milestone_id {
-        let ok: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM milestones WHERE id = ? AND group_id IS ?").bind(m).bind(&group_id).fetch_one(&mut *conn).await?;
+        let ok: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM milestones WHERE id = ? AND group_id IS ?")
+            .bind(m)
+            .bind(&group_id)
+            .fetch_one(&mut *conn)
+            .await?;
         if ok == 0 {
             return Err(AppError::field("milestoneId", "That milestone is not in this group."));
         }
     }
     let id = new_id();
     let now = ts(state.now());
-    let position: f64 = sqlx::query_scalar("SELECT CAST(COALESCE(MAX(position), 0) + 1 AS REAL) FROM tasks WHERE group_id IS ?").bind(&group_id).fetch_one(&mut *conn).await?;
+    let position: f64 = sqlx::query_scalar("SELECT CAST(COALESCE(MAX(position), 0) + 1 AS REAL) FROM tasks WHERE group_id IS ?")
+        .bind(&group_id)
+        .fetch_one(&mut *conn)
+        .await?;
     sqlx::query(
         "INSERT INTO tasks (id, group_id, title, notes, category, priority, duration_minutes, owner_id, assignee_id, due_date, due_time, start_date, start_time, deadline, timezone, recurrence, repeat_mode, series_start, rotation, column_key, milestone_id, tags, subtasks, position, template_key, version, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,1,?,?)",
     )
@@ -370,11 +378,23 @@ pub async fn create_task(state: &AppState, actor: &Actor, input: TaskInput, sour
     .execute(&mut *conn)
     .await?;
     let who = member_name(&mut conn, assignee.as_deref()).await?;
-    record(&mut conn, &now, NewActivity {
-        actor: Some(actor), source, entity_type: "task", entity_id: &id, group_id: group_id.as_deref(), op: "create",
-        summary: format!("{} added “{title}”{}", actor.name, if assignee.is_some() { format!(" for {who}") } else { String::new() }),
-        revision: 1, before: None, after: Some(json!({"assigneeId": assignee, "dueDate": due_date})),
-    }).await?;
+    record(
+        &mut conn,
+        &now,
+        NewActivity {
+            actor: Some(actor),
+            source,
+            entity_type: "task",
+            entity_id: &id,
+            group_id: group_id.as_deref(),
+            op: "create",
+            summary: format!("{} added “{title}”{}", actor.name, if assignee.is_some() { format!(" for {who}") } else { String::new() }),
+            revision: 1,
+            before: None,
+            after: Some(json!({"assigneeId": assignee, "dueDate": due_date})),
+        },
+    )
+    .await?;
     if let Some(a) = &assignee {
         if a != &actor.id {
             notify(&mut conn, state, a, "assignment", &format!("{} gave you “{title}”", actor.name), Some(&id), Some(&actor.id)).await?;
@@ -399,7 +419,8 @@ pub async fn notify(
     from: Option<&str>,
 ) -> AppResult<()> {
     let now = state.now();
-    let prefs: Option<String> = sqlx::query_scalar("SELECT prefs FROM members WHERE id = ?").bind(member_id).fetch_optional(&mut *conn).await?;
+    let prefs: Option<String> =
+        sqlx::query_scalar("SELECT prefs FROM members WHERE id = ?").bind(member_id).fetch_optional(&mut *conn).await?;
     let prefs: tendly_core::api::MemberPrefs = prefs.and_then(|p| serde_json::from_str(&p).ok()).unwrap_or_default();
     let rp = tendly_core::notify::RecipientPrefs {
         accepts_nudges: prefs.accepts_nudges,
@@ -445,7 +466,12 @@ fn opt_str(v: &Value) -> AppResult<Option<String>> {
     }
 }
 
-pub async fn update(State(state): State<AppState>, actor: Actor, Path(id): Path<String>, Json(p): Json<TaskPatch>) -> AppResult<Json<Task>> {
+pub async fn update(
+    State(state): State<AppState>,
+    actor: Actor,
+    Path(id): Path<String>,
+    Json(p): Json<TaskPatch>,
+) -> AppResult<Json<Task>> {
     let mut tx = state.db.begin().await?;
     let row = load_row(&mut tx, &id).await?;
     ensure_can_see(&mut tx, &row, &actor).await?;
@@ -464,15 +490,25 @@ pub async fn update(State(state): State<AppState>, actor: Actor, Path(id): Path<
             "title" => r.title = validate::title("title", v.as_str().unwrap_or(""), 200)?,
             "notes" => r.notes = validate::opt_text(opt_str(v)?.as_deref(), 5000, true),
             "category" => {
-                r.category = Category::parse(v.as_str().unwrap_or("")).ok_or_else(|| AppError::field("category", "Unknown category."))?.as_str().into()
+                r.category = Category::parse(v.as_str().unwrap_or(""))
+                    .ok_or_else(|| AppError::field("category", "Unknown category."))?
+                    .as_str()
+                    .into()
             }
             "priority" => {
-                r.priority = Priority::parse(v.as_str().unwrap_or("")).ok_or_else(|| AppError::field("priority", "Unknown priority."))?.as_str().into()
+                r.priority = Priority::parse(v.as_str().unwrap_or(""))
+                    .ok_or_else(|| AppError::field("priority", "Unknown priority."))?
+                    .as_str()
+                    .into()
             }
             "durationMinutes" => {
                 r.duration_minutes = match v {
                     Value::Null => None,
-                    v => Some(v.as_u64().filter(|d| (1..=1440).contains(d)).ok_or_else(|| AppError::field("durationMinutes", "Use 1 to 1440 minutes."))? as i64),
+                    v => Some(
+                        v.as_u64()
+                            .filter(|d| (1..=1440).contains(d))
+                            .ok_or_else(|| AppError::field("durationMinutes", "Use 1 to 1440 minutes."))? as i64,
+                    ),
                 }
             }
             "assigneeId" => r.assignee_id = opt_str(v)?,
@@ -484,26 +520,36 @@ pub async fn update(State(state): State<AppState>, actor: Actor, Path(id): Path<
             "timezone" => r.timezone = validate::timezone(opt_str(v)?.as_deref(), &state.config.default_timezone)?,
             "recurrence" => r.recurrence = validate::recurrence(opt_str(v)?.as_deref())?,
             "repeatMode" => {
-                r.repeat_mode = RepeatMode::parse(v.as_str().unwrap_or("")).ok_or_else(|| AppError::field("repeatMode", "Unknown repeat mode."))?.as_str().into()
+                r.repeat_mode = RepeatMode::parse(v.as_str().unwrap_or(""))
+                    .ok_or_else(|| AppError::field("repeatMode", "Unknown repeat mode."))?
+                    .as_str()
+                    .into()
             }
             "rotation" => {
-                let list: Vec<String> = serde_json::from_value(v.clone()).map_err(|_| AppError::field("rotation", "Expected a list of people."))?;
+                let list: Vec<String> =
+                    serde_json::from_value(v.clone()).map_err(|_| AppError::field("rotation", "Expected a list of people."))?;
                 r.rotation = serde_json::to_string(&list)?;
             }
             "columnKey" => r.column_key = opt_str(v)?,
             "milestoneId" => r.milestone_id = opt_str(v)?,
             "tags" => {
-                let list: Vec<String> = serde_json::from_value(v.clone()).map_err(|_| AppError::field("tags", "Expected a list of tags."))?;
+                let list: Vec<String> =
+                    serde_json::from_value(v.clone()).map_err(|_| AppError::field("tags", "Expected a list of tags."))?;
                 r.tags = serde_json::to_string(&validate::tags(&list)?)?;
             }
             "subtasks" => {
-                let list: Vec<Subtask> = serde_json::from_value(v.clone()).map_err(|_| AppError::field("subtasks", "Expected checklist items."))?;
+                let list: Vec<Subtask> =
+                    serde_json::from_value(v.clone()).map_err(|_| AppError::field("subtasks", "Expected checklist items."))?;
                 if list.len() > 50 {
                     return Err(AppError::field("subtasks", "Up to 50 checklist items."));
                 }
                 let cleaned: Vec<Subtask> = list
                     .into_iter()
-                    .map(|s| Subtask { id: if s.id.is_empty() { new_id() } else { s.id.chars().take(64).collect() }, title: tendly_core::model::clean_text(&s.title, 120, false), done: s.done })
+                    .map(|s| Subtask {
+                        id: if s.id.is_empty() { new_id() } else { s.id.chars().take(64).collect() },
+                        title: tendly_core::model::clean_text(&s.title, 120, false),
+                        done: s.done,
+                    })
                     .filter(|s| !s.title.is_empty())
                     .collect();
                 r.subtasks = serde_json::to_string(&cleaned)?;
@@ -582,10 +628,30 @@ pub async fn update(State(state): State<AppState>, actor: Actor, Path(id): Path<
     .await?;
     let after_row = load_row(&mut tx, &id).await?;
     let after: Task = after_row.into();
-    let (b, a) = diff_fields(&before, &after, &[
-        "title", "notes", "category", "priority", "durationMinutes", "assigneeId", "dueDate", "dueTime", "startDate", "startTime",
-        "deadline", "recurrence", "repeatMode", "rotation", "columnKey", "milestoneId", "tags", "groupId",
-    ]);
+    let (b, a) = diff_fields(
+        &before,
+        &after,
+        &[
+            "title",
+            "notes",
+            "category",
+            "priority",
+            "durationMinutes",
+            "assigneeId",
+            "dueDate",
+            "dueTime",
+            "startDate",
+            "startTime",
+            "deadline",
+            "recurrence",
+            "repeatMode",
+            "rotation",
+            "columnKey",
+            "milestoneId",
+            "tags",
+            "groupId",
+        ],
+    );
     let reassigned = before.assignee_id != after.assignee_id;
     let summary = if reassigned {
         let from = member_name(&mut tx, before.assignee_id.as_deref()).await?;
@@ -599,14 +665,36 @@ pub async fn update(State(state): State<AppState>, actor: Actor, Path(id): Path<
             format!("{} changed {} on “{}”", actor.name, fields.join(", "), after.title)
         }
     };
-    record(&mut tx, &now, NewActivity {
-        actor: Some(&actor), source: "app", entity_type: "task", entity_id: &id, group_id: after.group_id.as_deref(),
-        op: if reassigned { "reassign" } else { "update" }, summary, revision: after.version, before: Some(b), after: Some(a),
-    }).await?;
+    record(
+        &mut tx,
+        &now,
+        NewActivity {
+            actor: Some(&actor),
+            source: "app",
+            entity_type: "task",
+            entity_id: &id,
+            group_id: after.group_id.as_deref(),
+            op: if reassigned { "reassign" } else { "update" },
+            summary,
+            revision: after.version,
+            before: Some(b),
+            after: Some(a),
+        },
+    )
+    .await?;
     if reassigned {
         if let Some(to) = &after.assignee_id {
             if to != &actor.id {
-                notify(&mut tx, &state, to, "assignment", &format!("{} handed you “{}”", actor.name, after.title), Some(&id), Some(&actor.id)).await?;
+                notify(
+                    &mut tx,
+                    &state,
+                    to,
+                    "assignment",
+                    &format!("{} handed you “{}”", actor.name, after.title),
+                    Some(&id),
+                    Some(&actor.id),
+                )
+                .await?;
             }
         }
     }
@@ -622,14 +710,22 @@ pub struct VersionBody {
 
 /// Completes a task. Recurring tasks record the occurrence, keep their
 /// history, rotate responsibility and move to the next due date.
-pub async fn complete(State(state): State<AppState>, actor: Actor, Path(id): Path<String>, body: Option<Json<VersionBody>>) -> AppResult<Json<CompleteTaskResult>> {
+pub async fn complete(
+    State(state): State<AppState>,
+    actor: Actor,
+    Path(id): Path<String>,
+    body: Option<Json<VersionBody>>,
+) -> AppResult<Json<CompleteTaskResult>> {
     let mut tx = state.db.begin().await?;
     let row = load_row(&mut tx, &id).await?;
     ensure_can_see(&mut tx, &row, &actor).await?;
     if let Some(v) = body.and_then(|b| b.0.expected_version) {
         if v != row.version as u32 {
             let current: Task = row.into();
-            return Err(AppError::Conflict { message: "This changed in the meantime. Take another look.".into(), current: Some(serde_json::to_value(current)?) });
+            return Err(AppError::Conflict {
+                message: "This changed in the meantime. Take another look.".into(),
+                current: Some(serde_json::to_value(current)?),
+            });
         }
     }
     if row.completed_at.is_some() {
@@ -638,15 +734,17 @@ pub async fn complete(State(state): State<AppState>, actor: Actor, Path(id): Pat
     let now = state.now();
     let now_s = ts(now);
     let tz: Tz = row.timezone.parse().unwrap_or(Tz::UTC);
-    sqlx::query("INSERT INTO task_completions (id, task_id, occurrence_due, completed_by, completed_by_name, completed_at) VALUES (?,?,?,?,?,?)")
-        .bind(new_id())
-        .bind(&id)
-        .bind(&row.due_date)
-        .bind(&actor.id)
-        .bind(&actor.name)
-        .bind(&now_s)
-        .execute(&mut *tx)
-        .await?;
+    sqlx::query(
+        "INSERT INTO task_completions (id, task_id, occurrence_due, completed_by, completed_by_name, completed_at) VALUES (?,?,?,?,?,?)",
+    )
+    .bind(new_id())
+    .bind(&id)
+    .bind(&row.due_date)
+    .bind(&actor.id)
+    .bind(&actor.name)
+    .bind(&now_s)
+    .execute(&mut *tx)
+    .await?;
     let mut next_due = None;
     let mut next_assignee_id = None;
     let summary;
@@ -693,7 +791,8 @@ pub async fn complete(State(state): State<AppState>, actor: Actor, Path(id): Pat
                 if new_assignee != row.assignee_id {
                     if let Some(a) = &new_assignee {
                         if a != &actor.id {
-                            notify(&mut tx, &state, a, "assignment", &format!("Your turn: “{}”", row.title), Some(&id), Some(&actor.id)).await?;
+                            notify(&mut tx, &state, a, "assignment", &format!("Your turn: “{}”", row.title), Some(&id), Some(&actor.id))
+                                .await?;
                         }
                     }
                 }
@@ -712,7 +811,8 @@ pub async fn complete(State(state): State<AppState>, actor: Actor, Path(id): Pat
             }
         }
     } else {
-        let column = if row.group_id.is_some() && row.column_key.is_some() { Some(DONE_COLUMN.to_string()) } else { row.column_key.clone() };
+        let column =
+            if row.group_id.is_some() && row.column_key.is_some() { Some(DONE_COLUMN.to_string()) } else { row.column_key.clone() };
         sqlx::query("UPDATE tasks SET completed_at = ?, completed_by = ?, column_key = ?, completion_count = completion_count + 1, version = version + 1, updated_at = ? WHERE id = ?")
             .bind(&now_s)
             .bind(&actor.id)
@@ -724,12 +824,23 @@ pub async fn complete(State(state): State<AppState>, actor: Actor, Path(id): Pat
         summary = format!("{} finished “{}”", actor.name, row.title);
     }
     let after: Task = load_row(&mut tx, &id).await?.into();
-    record(&mut tx, &now_s, NewActivity {
-        actor: Some(&actor), source: "app", entity_type: "task", entity_id: &id, group_id: row.group_id.as_deref(),
-        op: "complete", summary, revision: after.version,
-        before: Some(json!({"dueDate": row.due_date, "assigneeId": row.assignee_id})),
-        after: Some(json!({"dueDate": after.due_date, "assigneeId": after.assignee_id, "completedAt": after.completed_at})),
-    }).await?;
+    record(
+        &mut tx,
+        &now_s,
+        NewActivity {
+            actor: Some(&actor),
+            source: "app",
+            entity_type: "task",
+            entity_id: &id,
+            group_id: row.group_id.as_deref(),
+            op: "complete",
+            summary,
+            revision: after.version,
+            before: Some(json!({"dueDate": row.due_date, "assigneeId": row.assignee_id})),
+            after: Some(json!({"dueDate": after.due_date, "assigneeId": after.assignee_id, "completedAt": after.completed_at})),
+        },
+    )
+    .await?;
     tx.commit().await?;
     Ok(Json(CompleteTaskResult { task: after, next_due_date: next_due, next_assignee_id }))
 }
@@ -748,30 +859,53 @@ pub async fn reopen(State(state): State<AppState>, actor: Actor, Path(id): Path<
         row.column_key.clone()
     };
     let now = ts(state.now());
-    sqlx::query("UPDATE tasks SET completed_at = NULL, completed_by = NULL, column_key = ?, version = version + 1, updated_at = ? WHERE id = ?")
-        .bind(&col)
-        .bind(&now)
-        .bind(&id)
-        .execute(&mut *tx)
-        .await?;
+    sqlx::query(
+        "UPDATE tasks SET completed_at = NULL, completed_by = NULL, column_key = ?, version = version + 1, updated_at = ? WHERE id = ?",
+    )
+    .bind(&col)
+    .bind(&now)
+    .bind(&id)
+    .execute(&mut *tx)
+    .await?;
     let after: Task = load_row(&mut tx, &id).await?.into();
-    record(&mut tx, &now, NewActivity {
-        actor: Some(&actor), source: "app", entity_type: "task", entity_id: &id, group_id: row.group_id.as_deref(), op: "reopen",
-        summary: format!("{} reopened “{}”", actor.name, row.title), revision: after.version, before: None, after: None,
-    }).await?;
+    record(
+        &mut tx,
+        &now,
+        NewActivity {
+            actor: Some(&actor),
+            source: "app",
+            entity_type: "task",
+            entity_id: &id,
+            group_id: row.group_id.as_deref(),
+            op: "reopen",
+            summary: format!("{} reopened “{}”", actor.name, row.title),
+            revision: after.version,
+            before: None,
+            after: None,
+        },
+    )
+    .await?;
     tx.commit().await?;
     Ok(Json(after))
 }
 
 /// Moves a project task between board columns. Moving into "done" completes it;
 /// moving out of "done" reopens it.
-pub async fn move_task(State(state): State<AppState>, actor: Actor, Path(id): Path<String>, Json(input): Json<MoveTaskInput>) -> AppResult<Json<Task>> {
+pub async fn move_task(
+    State(state): State<AppState>,
+    actor: Actor,
+    Path(id): Path<String>,
+    Json(input): Json<MoveTaskInput>,
+) -> AppResult<Json<Task>> {
     let mut tx = state.db.begin().await?;
     let row = load_row(&mut tx, &id).await?;
     ensure_can_see(&mut tx, &row, &actor).await?;
     if row.version as u32 != input.expected_version {
         let current: Task = row.into();
-        return Err(AppError::Conflict { message: "This card moved in the meantime.".into(), current: Some(serde_json::to_value(current)?) });
+        return Err(AppError::Conflict {
+            message: "This card moved in the meantime.".into(),
+            current: Some(serde_json::to_value(current)?),
+        });
     }
     let g = row.group_id.clone().ok_or_else(|| AppError::bad("Only project tasks live on a board."))?;
     let (mode, cols) = group_mode_and_columns(&mut tx, &g).await?;
@@ -807,11 +941,23 @@ pub async fn move_task(State(state): State<AppState>, actor: Actor, Path(id): Pa
     }
     let after: Task = load_row(&mut tx, &id).await?.into();
     if row.column_key.as_deref() != Some(input.column_key.as_str()) {
-        record(&mut tx, &now, NewActivity {
-            actor: Some(&actor), source: "app", entity_type: "task", entity_id: &id, group_id: Some(&g), op: "move",
-            summary: format!("{} moved “{}” to {}", actor.name, row.title, input.column_key.replace('_', " ")),
-            revision: after.version, before: Some(json!({"columnKey": row.column_key})), after: Some(json!({"columnKey": input.column_key})),
-        }).await?;
+        record(
+            &mut tx,
+            &now,
+            NewActivity {
+                actor: Some(&actor),
+                source: "app",
+                entity_type: "task",
+                entity_id: &id,
+                group_id: Some(&g),
+                op: "move",
+                summary: format!("{} moved “{}” to {}", actor.name, row.title, input.column_key.replace('_', " ")),
+                revision: after.version,
+                before: Some(json!({"columnKey": row.column_key})),
+                after: Some(json!({"columnKey": input.column_key})),
+            },
+        )
+        .await?;
     }
     tx.commit().await?;
     Ok(Json(after))
@@ -822,11 +968,29 @@ pub async fn delete(State(state): State<AppState>, actor: Actor, Path(id): Path<
     let row = load_row(&mut tx, &id).await?;
     ensure_can_see(&mut tx, &row, &actor).await?;
     let now = ts(state.now());
-    sqlx::query("UPDATE tasks SET deleted_at = ?, version = version + 1, updated_at = ? WHERE id = ?").bind(&now).bind(&now).bind(&id).execute(&mut *tx).await?;
-    record(&mut tx, &now, NewActivity {
-        actor: Some(&actor), source: "app", entity_type: "task", entity_id: &id, group_id: row.group_id.as_deref(), op: "delete",
-        summary: format!("{} removed “{}”", actor.name, row.title), revision: row.version as u32 + 1, before: None, after: None,
-    }).await?;
+    sqlx::query("UPDATE tasks SET deleted_at = ?, version = version + 1, updated_at = ? WHERE id = ?")
+        .bind(&now)
+        .bind(&now)
+        .bind(&id)
+        .execute(&mut *tx)
+        .await?;
+    record(
+        &mut tx,
+        &now,
+        NewActivity {
+            actor: Some(&actor),
+            source: "app",
+            entity_type: "task",
+            entity_id: &id,
+            group_id: row.group_id.as_deref(),
+            op: "delete",
+            summary: format!("{} removed “{}”", actor.name, row.title),
+            revision: row.version as u32 + 1,
+            before: None,
+            after: None,
+        },
+    )
+    .await?;
     tx.commit().await?;
     Ok(Json(json!({"deleted": true})))
 }
@@ -835,13 +999,15 @@ pub async fn history(State(state): State<AppState>, actor: Actor, Path(id): Path
     let mut conn = state.db.acquire().await?;
     let row = load_row(&mut conn, &id).await?;
     ensure_can_see(&mut conn, &row, &actor).await?;
-    let activity = sqlx::query_as::<_, ActivityRow>(&format!("{ACTIVITY_SELECT} WHERE entity_type = 'task' AND entity_id = ? ORDER BY at DESC LIMIT 200"))
-        .bind(&id)
-        .fetch_all(&mut *conn)
-        .await?
-        .into_iter()
-        .map(Into::into)
-        .collect();
+    let activity = sqlx::query_as::<_, ActivityRow>(&format!(
+        "{ACTIVITY_SELECT} WHERE entity_type = 'task' AND entity_id = ? ORDER BY at DESC LIMIT 200"
+    ))
+    .bind(&id)
+    .fetch_all(&mut *conn)
+    .await?
+    .into_iter()
+    .map(Into::into)
+    .collect();
     let completions = sqlx::query_as::<_, (String, String, Option<String>, Option<String>, String, String)>(
         "SELECT id, task_id, occurrence_due, completed_by, completed_by_name, completed_at FROM task_completions WHERE task_id = ? ORDER BY completed_at DESC LIMIT 200",
     )

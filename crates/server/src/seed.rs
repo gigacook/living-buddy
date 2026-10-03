@@ -16,9 +16,18 @@ pub async fn seed_demo(state: &AppState) -> Result<bool> {
     let tz = state.config.default_timezone.clone();
     let mk = |name: &str| MemberInput { display_name: name.into(), timezone: Some(tz.clone()) };
     let ctx = crate::security::RequestCtx { peer: [127, 0, 0, 1].into(), trusted_local: true, device_id: None, actor: None, admin: true };
-    let alex = crate::routes::members::create(axum::extract::State(state.clone()), ctx.clone(), axum::Json(mk("Alex"))).await.map_err(|e| anyhow::anyhow!("{e}"))?.0;
-    let sam = crate::routes::members::create(axum::extract::State(state.clone()), ctx.clone(), axum::Json(mk("Sam"))).await.map_err(|e| anyhow::anyhow!("{e}"))?.0;
-    let robin = crate::routes::members::create(axum::extract::State(state.clone()), ctx, axum::Json(mk("Robin"))).await.map_err(|e| anyhow::anyhow!("{e}"))?.0;
+    let alex = crate::routes::members::create(axum::extract::State(state.clone()), ctx.clone(), axum::Json(mk("Alex")))
+        .await
+        .map_err(|e| anyhow::anyhow!("{e}"))?
+        .0;
+    let sam = crate::routes::members::create(axum::extract::State(state.clone()), ctx.clone(), axum::Json(mk("Sam")))
+        .await
+        .map_err(|e| anyhow::anyhow!("{e}"))?
+        .0;
+    let robin = crate::routes::members::create(axum::extract::State(state.clone()), ctx, axum::Json(mk("Robin")))
+        .await
+        .map_err(|e| anyhow::anyhow!("{e}"))?
+        .0;
     let a = Actor { id: alex.id.clone(), name: alex.display_name.clone() };
     let home = crate::routes::groups::create(
         axum::extract::State(state.clone()),
@@ -40,7 +49,14 @@ pub async fn seed_demo(state: &AppState) -> Result<bool> {
     let today = state.now().with_timezone(&tz.parse::<chrono_tz::Tz>().unwrap_or(chrono_tz::Tz::UTC)).date_naive();
     let d = |n: i64| (today + Duration::days(n)).format("%Y-%m-%d").to_string();
     let rot = vec![alex.id.clone(), sam.id.clone(), robin.id.clone()];
-    for (key, due, rotation) in [("dishes", 0, true), ("waste", 1, true), ("laundry", 2, false), ("bathroom", -1, true), ("groceries", 3, false), ("bed_linen", 5, false)] {
+    for (key, due, rotation) in [
+        ("dishes", 0, true),
+        ("waste", 1, true),
+        ("laundry", 2, false),
+        ("bathroom", -1, true),
+        ("groceries", 3, false),
+        ("bed_linen", 5, false),
+    ] {
         let _ = crate::routes::misc::use_template(
             axum::extract::State(state.clone()),
             a.clone(),
@@ -118,7 +134,8 @@ pub async fn seed_demo(state: &AppState) -> Result<bool> {
                 due_time: time.map(String::from),
                 duration_minutes: mins,
                 timezone: Some(tz.clone()),
-                subtasks: (title == "Read chapter 4 for class").then(|| vec!["Skim headings".into(), "Read".into(), "Write 3 notes".into()]),
+                subtasks: (title == "Read chapter 4 for class")
+                    .then(|| vec!["Skim headings".into(), "Read".into(), "Write 3 notes".into()]),
                 ..TaskInput::default()
             },
             "demo",

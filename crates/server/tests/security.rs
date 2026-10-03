@@ -111,7 +111,13 @@ async fn remote_mode_requires_paired_device_and_admin_token() {
     let res = app.send(Req::new("GET", "/api/admin/settings").host(host).peer(peer).header("cookie", &cookie_pair)).await;
     assert_eq!(res.status, StatusCode::FORBIDDEN);
     let res = app
-        .send(Req::new("GET", "/api/admin/settings").host(host).peer(peer).header("cookie", &cookie_pair).header("x-tendly-admin-token", &"a".repeat(40)))
+        .send(
+            Req::new("GET", "/api/admin/settings")
+                .host(host)
+                .peer(peer)
+                .header("cookie", &cookie_pair)
+                .header("x-tendly-admin-token", &"a".repeat(40)),
+        )
         .await;
     assert_eq!(res.status, StatusCode::OK);
 }
@@ -125,7 +131,8 @@ async fn secrets_never_leave_admin_endpoints() {
     assert_eq!(v["hasKey"], true);
     assert_eq!(v["keySource"], "stored");
     assert!(!v.to_string().contains("SYNTHETIC"));
-    let stored: String = sqlx::query_scalar("SELECT value FROM settings WHERE key = 'ai_key_ciphertext'").fetch_one(&app.state.db).await.unwrap();
+    let stored: String =
+        sqlx::query_scalar("SELECT value FROM settings WHERE key = 'ai_key_ciphertext'").fetch_one(&app.state.db).await.unwrap();
     assert!(!stored.contains("SYNTHETIC"));
     let export = app.send(Req::new("GET", "/api/admin/export")).await;
     assert!(!export.text.contains("SYNTHETIC") && !export.text.contains("ai_key_ciphertext"));

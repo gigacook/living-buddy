@@ -1,0 +1,12 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Least privilege: the main window may call Tendly's single API command and show notifications. No shell, no filesystem, no remote content.",
+  "windows": ["main"],
+  "platforms": ["linux", "macOS", "windows", "iOS", "android"],
+  "permissions": [
+    "core:default",
+    "notification:default",
+    "allow-api-request"
+  ]
+}

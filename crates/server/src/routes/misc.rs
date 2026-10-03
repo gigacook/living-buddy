@@ -49,7 +49,8 @@ impl From<TemplateRow> for RoutineTemplate {
     }
 }
 
-const TEMPLATE_SELECT: &str = "SELECT key, title, category, recurrence, repeat_mode, duration_minutes, checklist, tip FROM routine_templates";
+const TEMPLATE_SELECT: &str =
+    "SELECT key, title, category, recurrence, repeat_mode, duration_minutes, checklist, tip FROM routine_templates";
 
 async fn load_template(state: &AppState, key: &str) -> AppResult<RoutineTemplate> {
     sqlx::query_as::<_, TemplateRow>(&format!("{TEMPLATE_SELECT} WHERE key = ?"))
@@ -65,7 +66,12 @@ pub async fn templates(State(state): State<AppState>) -> AppResult<Json<Vec<Rout
     Ok(Json(rows.into_iter().map(Into::into).collect()))
 }
 
-pub async fn update_template(State(state): State<AppState>, actor: Actor, Path(key): Path<String>, Json(p): Json<TemplatePatch>) -> AppResult<Json<RoutineTemplate>> {
+pub async fn update_template(
+    State(state): State<AppState>,
+    actor: Actor,
+    Path(key): Path<String>,
+    Json(p): Json<TemplatePatch>,
+) -> AppResult<Json<RoutineTemplate>> {
     let mut t = load_template(&state, &key).await?;
     if let Some(v) = &p.title {
         t.title = validate::title("title", v, 80)?;
@@ -101,15 +107,33 @@ pub async fn update_template(State(state): State<AppState>, actor: Actor, Path(k
         .bind(&key)
         .execute(&mut *tx)
         .await?;
-    record(&mut tx, &now, NewActivity {
-        actor: Some(&actor), source: "app", entity_type: "template", entity_id: &key, group_id: None, op: "update",
-        summary: format!("{} edited the “{}” template", actor.name, t.title), revision: 0, before: None, after: None,
-    }).await?;
+    record(
+        &mut tx,
+        &now,
+        NewActivity {
+            actor: Some(&actor),
+            source: "app",
+            entity_type: "template",
+            entity_id: &key,
+            group_id: None,
+            op: "update",
+            summary: format!("{} edited the “{}” template", actor.name, t.title),
+            revision: 0,
+            before: None,
+            after: None,
+        },
+    )
+    .await?;
     tx.commit().await?;
     Ok(Json(load_template(&state, &key).await?))
 }
 
-pub async fn use_template(State(state): State<AppState>, actor: Actor, Path(key): Path<String>, Json(input): Json<UseTemplateInput>) -> AppResult<Json<Task>> {
+pub async fn use_template(
+    State(state): State<AppState>,
+    actor: Actor,
+    Path(key): Path<String>,
+    Json(input): Json<UseTemplateInput>,
+) -> AppResult<Json<Task>> {
     let t = load_template(&state, &key).await?;
     let task = create_task(
         &state,
@@ -218,7 +242,12 @@ pub async fn notifications(State(state): State<AppState>, actor: Actor) -> AppRe
 }
 
 pub async fn mark_read(State(state): State<AppState>, actor: Actor, Path(id): Path<String>) -> AppResult<Json<Value>> {
-    sqlx::query("UPDATE notifications SET read_at = ? WHERE id = ? AND member_id = ?").bind(ts(state.now())).bind(&id).bind(&actor.id).execute(&state.db).await?;
+    sqlx::query("UPDATE notifications SET read_at = ? WHERE id = ? AND member_id = ?")
+        .bind(ts(state.now()))
+        .bind(&id)
+        .bind(&actor.id)
+        .execute(&state.db)
+        .await?;
     Ok(Json(json!({"ok": true})))
 }
 
@@ -237,11 +266,13 @@ pub async fn nudge(State(state): State<AppState>, actor: Actor, Json(input): Jso
     let to = crate::routes::members::load(&state, &input.to_member_id).await?;
     let mut tx = state.db.begin().await?;
     // Nudges only between people who share a group.
-    let shared: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM group_members a JOIN group_members b ON a.group_id = b.group_id WHERE a.member_id = ? AND b.member_id = ?")
-        .bind(&actor.id)
-        .bind(&to.id)
-        .fetch_one(&mut *tx)
-        .await?;
+    let shared: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM group_members a JOIN group_members b ON a.group_id = b.group_id WHERE a.member_id = ? AND b.member_id = ?",
+    )
+    .bind(&actor.id)
+    .bind(&to.id)
+    .fetch_one(&mut *tx)
+    .await?;
     if shared == 0 {
         return Err(AppError::Forbidden("You can only send reminders to people in your groups."));
     }
@@ -266,7 +297,9 @@ pub async fn nudge(State(state): State<AppState>, actor: Actor, Json(input): Jso
     let deliver = tendly_core::notify::plan_nudge(&history, &actor.id, &to.id, input.task_id.as_deref(), &prefs, now)
         .map_err(|e| AppError::bad(e.to_string()))?;
     let task_title: Option<String> = match &input.task_id {
-        Some(t) => sqlx::query_scalar("SELECT title FROM tasks WHERE id = ? AND deleted_at IS NULL").bind(t).fetch_optional(&mut *tx).await?,
+        Some(t) => {
+            sqlx::query_scalar("SELECT title FROM tasks WHERE id = ? AND deleted_at IS NULL").bind(t).fetch_optional(&mut *tx).await?
+        }
         None => None,
     };
     let msg = validate::opt_text(input.message.as_deref(), 140, false);

@@ -164,7 +164,9 @@ pub enum TimerCommand {
     /// Starts the next phase after `phase_complete`.
     Continue,
     /// Adds minutes to a running or paused timer.
-    Extend { minutes: u32 },
+    Extend {
+        minutes: u32,
+    },
 }
 
 impl TimerState {
@@ -181,7 +183,7 @@ impl TimerState {
         match self.phase {
             Phase::Focus => {
                 let done = self.completed_focus + 1;
-                if done % self.config.cycles_before_long_break.max(1) == 0 {
+                if done.is_multiple_of(self.config.cycles_before_long_break.max(1)) {
                     Phase::LongBreak
                 } else {
                     Phase::ShortBreak
@@ -412,7 +414,8 @@ mod tests {
     fn long_break_after_configured_cycles() {
         let cfg = PomodoroConfig { cycles_before_long_break: 2, auto_start_breaks: false, ..PomodoroConfig::default() };
         let mut s = TimerState::default();
-        s.apply(TimerCommand::Start { kind: TimerKind::Pomodoro, minutes: None, label: None, task_id: None, config: Some(cfg) }, t0()).unwrap();
+        s.apply(TimerCommand::Start { kind: TimerKind::Pomodoro, minutes: None, label: None, task_id: None, config: Some(cfg) }, t0())
+            .unwrap();
         let mut now = t0();
         // focus 1 -> short break
         now += Duration::minutes(26);
@@ -434,7 +437,11 @@ mod tests {
         s.apply(TimerCommand::Reset, t0()).unwrap();
         assert_eq!(s.status, TimerStatus::Idle);
         let bad = PomodoroConfig { focus_minutes: 0, ..PomodoroConfig::default() };
-        assert!(s.apply(TimerCommand::Start { kind: TimerKind::Pomodoro, minutes: None, label: None, task_id: None, config: Some(bad) }, t0()).is_err());
-        assert!(s.apply(TimerCommand::Start { kind: TimerKind::Focus, minutes: Some(0), label: None, task_id: None, config: None }, t0()).is_err());
+        assert!(s
+            .apply(TimerCommand::Start { kind: TimerKind::Pomodoro, minutes: None, label: None, task_id: None, config: Some(bad) }, t0())
+            .is_err());
+        assert!(s
+            .apply(TimerCommand::Start { kind: TimerKind::Focus, minutes: Some(0), label: None, task_id: None, config: None }, t0())
+            .is_err());
     }
 }

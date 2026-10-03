@@ -88,7 +88,13 @@ pub async fn guard(State(state): State<AppState>, mut req: Request, next: Next) 
     let host = headers.get(header::HOST).and_then(|h| h.to_str().ok()).map(host_only);
     match &host {
         Some(h) if allowed_hosts.iter().any(|a| a == h) => {}
-        _ => return deny(StatusCode::MISDIRECTED_REQUEST, "host_not_allowed", "Unrecognized host name. Add it to TENDLY_ALLOWED_HOSTS if this is intended."),
+        _ => {
+            return deny(
+                StatusCode::MISDIRECTED_REQUEST,
+                "host_not_allowed",
+                "Unrecognized host name. Add it to TENDLY_ALLOWED_HOSTS if this is intended.",
+            )
+        }
     }
 
     let path = req.uri().path().to_string();

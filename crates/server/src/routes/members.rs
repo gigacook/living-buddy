@@ -96,7 +96,12 @@ pub async fn create(State(state): State<AppState>, ctx: RequestCtx, Json(input):
     Ok(Json(load(&state, &id).await?))
 }
 
-pub async fn update(State(state): State<AppState>, actor: Actor, Path(id): Path<String>, Json(p): Json<MemberPatch>) -> AppResult<Json<Member>> {
+pub async fn update(
+    State(state): State<AppState>,
+    actor: Actor,
+    Path(id): Path<String>,
+    Json(p): Json<MemberPatch>,
+) -> AppResult<Json<Member>> {
     // People edit their own profile; names are not a security boundary, but this avoids accidents.
     if actor.id != id {
         return Err(AppError::Forbidden("You can only change your own profile."));

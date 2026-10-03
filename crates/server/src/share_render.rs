@@ -23,7 +23,8 @@ pub fn esc(s: &str) -> String {
 pub fn render(label: &str, items: &[EventOccurrence], tz: Tz, token: &str, now: DateTime<Utc>) -> String {
     let mut days: BTreeMap<String, Vec<&EventOccurrence>> = BTreeMap::new();
     for o in items {
-        let key = if o.all_day { o.start_date.clone().unwrap_or_default() } else { o.start.with_timezone(&tz).format("%Y-%m-%d").to_string() };
+        let key =
+            if o.all_day { o.start_date.clone().unwrap_or_default() } else { o.start.with_timezone(&tz).format("%Y-%m-%d").to_string() };
         days.entry(key).or_default().push(o);
     }
     let mut body = String::new();
@@ -31,7 +32,9 @@ pub fn render(label: &str, items: &[EventOccurrence], tz: Tz, token: &str, now: 
         body.push_str("<p class=\"empty\">Nothing scheduled in this window.</p>");
     }
     for (day, list) in &days {
-        let pretty = chrono::NaiveDate::parse_from_str(day, "%Y-%m-%d").map(|d| d.format("%A, %B %-d, %Y").to_string()).unwrap_or_else(|_| day.clone());
+        let pretty = chrono::NaiveDate::parse_from_str(day, "%Y-%m-%d")
+            .map(|d| d.format("%A, %B %-d, %Y").to_string())
+            .unwrap_or_else(|_| day.clone());
         body.push_str(&format!("<section><h2>{}</h2><ul>", esc(&pretty)));
         for o in list {
             let when = if o.all_day {
@@ -41,7 +44,11 @@ pub fn render(label: &str, items: &[EventOccurrence], tz: Tz, token: &str, now: 
             };
             let kind = if o.kind == "task" { "<span class=\"tag\">Task</span> " } else { "" };
             let cat = o.category.map(|c| format!("<span class=\"tag\">{}</span> ", esc(c.as_str()))).unwrap_or_default();
-            body.push_str(&format!("<li><span class=\"when\">{}</span><span class=\"what\">{kind}{cat}{}</span>", esc(&when), esc(&o.title)));
+            body.push_str(&format!(
+                "<li><span class=\"when\">{}</span><span class=\"what\">{kind}{cat}{}</span>",
+                esc(&when),
+                esc(&o.title)
+            ));
             if let Some(l) = &o.location {
                 body.push_str(&format!("<span class=\"meta\">{}</span>", esc(l)));
             }

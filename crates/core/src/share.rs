@@ -41,9 +41,8 @@ pub struct ShareScope {
 
 impl ShareScope {
     pub fn validate(&self) -> Result<(), &'static str> {
-        let selects_something = !self.group_ids.is_empty()
-            || !self.source_ids.is_empty()
-            || (self.include_personal && !self.member_ids.is_empty());
+        let selects_something =
+            !self.group_ids.is_empty() || !self.source_ids.is_empty() || (self.include_personal && !self.member_ids.is_empty());
         if !selects_something {
             return Err("Choose at least one group, calendar or person to share.");
         }
@@ -78,8 +77,7 @@ pub fn allows_task(scope: &ShareScope, t: &TaskFacts) -> bool {
     match t.group_id {
         Some(g) => {
             scope.group_ids.iter().any(|x| x == g)
-                && (scope.member_ids.is_empty()
-                    || t.assignee_id.map(|a| scope.member_ids.iter().any(|m| m == a)).unwrap_or(false))
+                && (scope.member_ids.is_empty() || t.assignee_id.map(|a| scope.member_ids.iter().any(|m| m == a)).unwrap_or(false))
         }
         None => scope.include_personal && scope.member_ids.iter().any(|m| m == t.owner_id),
     }

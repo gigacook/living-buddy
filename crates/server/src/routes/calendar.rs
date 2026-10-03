@@ -17,7 +17,8 @@ use chrono::{DateTime, Duration, NaiveDate, NaiveTime, Utc};
 use serde::Deserialize;
 use serde_json::{json, Value};
 use tendly_core::api::{
-    Activity, CalendarEvent, CalendarEventInput, CalendarEventPatch, CalendarSource, CalendarSourceInput, CalendarSourcePatch, EventOccurrence, ImportResult,
+    Activity, CalendarEvent, CalendarEventInput, CalendarEventPatch, CalendarSource, CalendarSourceInput, CalendarSourcePatch,
+    EventOccurrence, ImportResult,
 };
 use tendly_core::ics::{EventStatus, IcsEvent, IcsTime, Limits};
 use tendly_core::model::Category;
@@ -44,7 +45,11 @@ pub async fn sources(State(state): State<AppState>, actor: Actor) -> AppResult<J
     Ok(Json(out))
 }
 
-pub async fn create_source(State(state): State<AppState>, actor: Actor, Json(i): Json<CalendarSourceInput>) -> AppResult<Json<CalendarSource>> {
+pub async fn create_source(
+    State(state): State<AppState>,
+    actor: Actor,
+    Json(i): Json<CalendarSourceInput>,
+) -> AppResult<Json<CalendarSource>> {
     let name = validate::title("name", &i.name, 80)?;
     if let Some(g) = &i.group_id {
         ensure_member(&state, g, &actor).await?;
@@ -76,11 +81,27 @@ pub async fn create_source(State(state): State<AppState>, actor: Actor, Json(i):
         .bind(&now)
         .execute(&mut *tx)
         .await?;
-    record(&mut tx, &now, NewActivity {
-        actor: Some(&actor), source: "app", entity_type: "calendar_source", entity_id: &id, group_id: i.group_id.as_deref(), op: "create",
-        summary: if i.kind == "url" { format!("{} subscribed to “{name}”", actor.name) } else { format!("{} created the calendar “{name}”", actor.name) },
-        revision: 1, before: None, after: Some(json!({"kind": i.kind, "host": display})),
-    }).await?;
+    record(
+        &mut tx,
+        &now,
+        NewActivity {
+            actor: Some(&actor),
+            source: "app",
+            entity_type: "calendar_source",
+            entity_id: &id,
+            group_id: i.group_id.as_deref(),
+            op: "create",
+            summary: if i.kind == "url" {
+                format!("{} subscribed to “{name}”", actor.name)
+            } else {
+                format!("{} created the calendar “{name}”", actor.name)
+            },
+            revision: 1,
+            before: None,
+            after: Some(json!({"kind": i.kind, "host": display})),
+        },
+    )
+    .await?;
     tx.commit().await?;
     let source = load_source(&state, &id).await?.ok_or(AppError::NotFound("calendar"))?;
     if source.kind == "url" {
@@ -91,11 +112,20 @@ pub async fn create_source(State(state): State<AppState>, actor: Actor, Json(i):
     Ok(Json(source.to_api(&state).await?))
 }
 
-pub async fn update_source(State(state): State<AppState>, actor: Actor, Path(id): Path<String>, Json(p): Json<CalendarSourcePatch>) -> AppResult<Json<CalendarSource>> {
+pub async fn update_source(
+    State(state): State<AppState>,
+    actor: Actor,
+    Path(id): Path<String>,
+    Json(p): Json<CalendarSourcePatch>,
+) -> AppResult<Json<CalendarSource>> {
     let s = source_for_actor(&state, &actor, &id).await?;
     let mut tx = state.db.begin().await?;
     if let Some(n) = &p.name {
-        sqlx::query("UPDATE calendar_sources SET name = ? WHERE id = ?").bind(validate::title("name", n, 80)?).bind(&id).execute(&mut *tx).await?;
+        sqlx::query("UPDATE calendar_sources SET name = ? WHERE id = ?")
+            .bind(validate::title("name", n, 80)?)
+            .bind(&id)
+            .execute(&mut *tx)
+            .await?;
     }
     if let Some(g) = &p.group_id {
         if let Some(g) = g {
@@ -110,16 +140,37 @@ pub async fn update_source(State(state): State<AppState>, actor: Actor, Path(id)
         sqlx::query("UPDATE calendar_sources SET enabled = ? WHERE id = ?").bind(v as i64).bind(&id).execute(&mut *tx).await?;
     }
     if let Some(v) = p.priority {
-        sqlx::query("UPDATE calendar_sources SET priority = ? WHERE id = ?").bind(v.clamp(0, 1000) as i64).bind(&id).execute(&mut *tx).await?;
+        sqlx::query("UPDATE calendar_sources SET priority = ? WHERE id = ?")
+            .bind(v.clamp(0, 1000) as i64)
+            .bind(&id)
+            .execute(&mut *tx)
+            .await?;
     }
     if let Some(v) = p.refresh_minutes {
-        sqlx::query("UPDATE calendar_sources SET refresh_minutes = ? WHERE id = ?").bind(v.clamp(15, 1440) as i64).bind(&id).execute(&mut *tx).await?;
+        sqlx::query("UPDATE calendar_sources SET refresh_minutes = ? WHERE id = ?")
+            .bind(v.clamp(15, 1440) as i64)
+            .bind(&id)
+            .execute(&mut *tx)
+            .await?;
     }
     let now = ts(state.now());
-    record(&mut tx, &now, NewActivity {
-        actor: Some(&actor), source: "app", entity_type: "calendar_source", entity_id: &id, group_id: s.group_id.as_deref(), op: "update",
-        summary: format!("{} changed settings of “{}”", actor.name, s.name), revision: 0, before: None, after: Some(serde_json::to_value(&p)?),
-    }).await?;
+    record(
+        &mut tx,
+        &now,
+        NewActivity {
+            actor: Some(&actor),
+            source: "app",
+            entity_type: "calendar_source",
+            entity_id: &id,
+            group_id: s.group_id.as_deref(),
+            op: "update",
+            summary: format!("{} changed settings of “{}”", actor.name, s.name),
+            revision: 0,
+            before: None,
+            after: Some(serde_json::to_value(&p)?),
+        },
+    )
+    .await?;
     tx.commit().await?;
     let s = load_source(&state, &id).await?.ok_or(AppError::NotFound("calendar"))?;
     Ok(Json(s.to_api(&state).await?))
@@ -134,15 +185,33 @@ pub async fn delete_source(State(state): State<AppState>, actor: Actor, Path(id)
     let mut tx = state.db.begin().await?;
     // Deleting a source removes only its own events (ON DELETE CASCADE).
     sqlx::query("DELETE FROM calendar_sources WHERE id = ?").bind(&id).execute(&mut *tx).await?;
-    record(&mut tx, &now, NewActivity {
-        actor: Some(&actor), source: "app", entity_type: "calendar_source", entity_id: &id, group_id: s.group_id.as_deref(), op: "delete",
-        summary: format!("{} removed the calendar “{}” and its events", actor.name, s.name), revision: 0, before: None, after: None,
-    }).await?;
+    record(
+        &mut tx,
+        &now,
+        NewActivity {
+            actor: Some(&actor),
+            source: "app",
+            entity_type: "calendar_source",
+            entity_id: &id,
+            group_id: s.group_id.as_deref(),
+            op: "delete",
+            summary: format!("{} removed the calendar “{}” and its events", actor.name, s.name),
+            revision: 0,
+            before: None,
+            after: None,
+        },
+    )
+    .await?;
     tx.commit().await?;
     Ok(Json(json!({"deleted": true})))
 }
 
-pub async fn refresh_source(State(state): State<AppState>, ctx: crate::security::RequestCtx, actor: Actor, Path(id): Path<String>) -> AppResult<Json<ImportResult>> {
+pub async fn refresh_source(
+    State(state): State<AppState>,
+    ctx: crate::security::RequestCtx,
+    actor: Actor,
+    Path(id): Path<String>,
+) -> AppResult<Json<ImportResult>> {
     let s = source_for_actor(&state, &actor, &id).await?;
     if s.kind != "url" {
         return Err(AppError::bad("Only subscribed calendars can be refreshed. Re-import the file instead."));
@@ -153,11 +222,26 @@ pub async fn refresh_source(State(state): State<AppState>, ctx: crate::security:
     let stats = calendar::refresh_url_source(&state, &s).await.map_err(|e| AppError::Upstream(e.to_string()))?;
     let now = ts(state.now());
     let mut conn = state.db.acquire().await?;
-    record(&mut conn, &now, NewActivity {
-        actor: Some(&actor), source: &format!("poll:{}", s.name), entity_type: "calendar_source", entity_id: &id, group_id: s.group_id.as_deref(), op: "poll",
-        summary: format!("{} refreshed “{}”: {} new, {} changed, {} removed", actor.name, s.name, stats.inserted, stats.updated, stats.cancelled),
-        revision: 0, before: None, after: None,
-    }).await?;
+    record(
+        &mut conn,
+        &now,
+        NewActivity {
+            actor: Some(&actor),
+            source: &format!("poll:{}", s.name),
+            entity_type: "calendar_source",
+            entity_id: &id,
+            group_id: s.group_id.as_deref(),
+            op: "poll",
+            summary: format!(
+                "{} refreshed “{}”: {} new, {} changed, {} removed",
+                actor.name, s.name, stats.inserted, stats.updated, stats.cancelled
+            ),
+            revision: 0,
+            before: None,
+            after: None,
+        },
+    )
+    .await?;
     let s = load_source(&state, &id).await?.ok_or(AppError::NotFound("calendar"))?;
     Ok(Json(ImportResult {
         warnings: serde_json::from_str(&s.warnings).unwrap_or_default(),
@@ -180,7 +264,12 @@ pub struct ImportQuery {
 
 /// Imports an .ics file (sent as the raw request body). Re-importing into the
 /// same source updates events in place instead of duplicating them.
-pub async fn import(State(state): State<AppState>, actor: Actor, Query(q): Query<ImportQuery>, body: Bytes) -> AppResult<Json<ImportResult>> {
+pub async fn import(
+    State(state): State<AppState>,
+    actor: Actor,
+    Query(q): Query<ImportQuery>,
+    body: Bytes,
+) -> AppResult<Json<ImportResult>> {
     if body.len() > Limits::default().max_bytes {
         return Err(AppError::TooLarge);
     }
@@ -218,13 +307,32 @@ pub async fn import(State(state): State<AppState>, actor: Actor, Query(q): Query
     };
     let stats = calendar::apply_feed(&state, &source, &parsed, Some(&actor), "import", q.source_id.is_some()).await?;
     let now = ts(state.now());
-    sqlx::query("UPDATE calendar_sources SET last_fetched_at = ?, last_status = 'ok' WHERE id = ?").bind(&now).bind(&source.id).execute(&state.db).await?;
+    sqlx::query("UPDATE calendar_sources SET last_fetched_at = ?, last_status = 'ok' WHERE id = ?")
+        .bind(&now)
+        .bind(&source.id)
+        .execute(&state.db)
+        .await?;
     let mut conn = state.db.acquire().await?;
-    record(&mut conn, &now, NewActivity {
-        actor: Some(&actor), source: "import:file", entity_type: "calendar_source", entity_id: &source.id, group_id: source.group_id.as_deref(), op: "import",
-        summary: format!("{} imported a file into “{}”: {} new, {} changed, {} removed", actor.name, source.name, stats.inserted, stats.updated, stats.cancelled),
-        revision: 0, before: None, after: None,
-    }).await?;
+    record(
+        &mut conn,
+        &now,
+        NewActivity {
+            actor: Some(&actor),
+            source: "import:file",
+            entity_type: "calendar_source",
+            entity_id: &source.id,
+            group_id: source.group_id.as_deref(),
+            op: "import",
+            summary: format!(
+                "{} imported a file into “{}”: {} new, {} changed, {} removed",
+                actor.name, source.name, stats.inserted, stats.updated, stats.cancelled
+            ),
+            revision: 0,
+            before: None,
+            after: None,
+        },
+    )
+    .await?;
     let s = load_source(&state, &source.id).await?.ok_or(AppError::NotFound("calendar"))?;
     Ok(Json(ImportResult {
         warnings: parsed.warnings,
@@ -290,7 +398,11 @@ pub fn build_query(state: &AppState, q: &RangeQuery) -> AppResult<OccQuery> {
     })
 }
 
-pub async fn occurrences(State(state): State<AppState>, actor: Actor, Query(q): Query<RangeQuery>) -> AppResult<Json<Vec<EventOccurrence>>> {
+pub async fn occurrences(
+    State(state): State<AppState>,
+    actor: Actor,
+    Query(q): Query<RangeQuery>,
+) -> AppResult<Json<Vec<EventOccurrence>>> {
     let oq = build_query(&state, &q)?;
     for g in &oq.group_ids {
         ensure_member(&state, g, &actor).await?;
@@ -352,7 +464,8 @@ fn input_to_ics(i: &CalendarEventInput, tz_default: &str, uid: &str, sequence: i
     let (start, end) = if i.all_day {
         (IcsTime::Date { date: sd }, IcsTime::Date { date: ed + Duration::days(1) })
     } else {
-        let st = validate::time("startTime", i.start_time.as_deref())?.ok_or_else(|| AppError::field("startTime", "Pick a start time or make it all-day."))?;
+        let st = validate::time("startTime", i.start_time.as_deref())?
+            .ok_or_else(|| AppError::field("startTime", "Pick a start time or make it all-day."))?;
         let st = NaiveTime::parse_from_str(&st, "%H:%M").expect("validated");
         let et = match validate::time("endTime", i.end_time.as_deref())? {
             Some(t) => NaiveTime::parse_from_str(&t, "%H:%M").expect("validated"),
@@ -390,7 +503,11 @@ fn input_to_ics(i: &CalendarEventInput, tz_default: &str, uid: &str, sequence: i
     })
 }
 
-pub async fn create_event(State(state): State<AppState>, actor: Actor, Json(i): Json<CalendarEventInput>) -> AppResult<Json<CalendarEvent>> {
+pub async fn create_event(
+    State(state): State<AppState>,
+    actor: Actor,
+    Json(i): Json<CalendarEventInput>,
+) -> AppResult<Json<CalendarEvent>> {
     let s = source_for_actor(&state, &actor, &i.source_id).await?;
     if s.kind != "local" {
         return Err(AppError::bad("New events go into one of your own calendars, not a subscription."));
@@ -427,11 +544,23 @@ pub async fn create_event(State(state): State<AppState>, actor: Actor, Json(i): 
     .bind(&now)
     .execute(&mut *tx)
     .await?;
-    record(&mut tx, &now, NewActivity {
-        actor: Some(&actor), source: "app", entity_type: "calendar_event", entity_id: &id, group_id: i.group_id.as_deref().or(s.group_id.as_deref()),
-        op: "create", summary: format!("{} added “{}” to {}", actor.name, e.summary, s.name), revision: 1, before: None,
-        after: Some(json!({"start": e.start, "title": e.summary})),
-    }).await?;
+    record(
+        &mut tx,
+        &now,
+        NewActivity {
+            actor: Some(&actor),
+            source: "app",
+            entity_type: "calendar_event",
+            entity_id: &id,
+            group_id: i.group_id.as_deref().or(s.group_id.as_deref()),
+            op: "create",
+            summary: format!("{} added “{}” to {}", actor.name, e.summary, s.name),
+            revision: 1,
+            before: None,
+            after: Some(json!({"start": e.start, "title": e.summary})),
+        },
+    )
+    .await?;
     tx.commit().await?;
     let (r, s) = load_event(&state, &actor, &id).await?;
     Ok(Json(r.to_api(&s, &state.config.default_timezone)))
@@ -440,7 +569,12 @@ pub async fn create_event(State(state): State<AppState>, actor: Actor, Json(i): 
 /// Local events are fully editable. Events from subscriptions or imports only
 /// accept local overrides (category, note, hidden): Tendly does not write back
 /// to external providers.
-pub async fn update_event(State(state): State<AppState>, actor: Actor, Path(id): Path<String>, Json(p): Json<CalendarEventPatch>) -> AppResult<Json<CalendarEvent>> {
+pub async fn update_event(
+    State(state): State<AppState>,
+    actor: Actor,
+    Path(id): Path<String>,
+    Json(p): Json<CalendarEventPatch>,
+) -> AppResult<Json<CalendarEvent>> {
     let (r, s) = load_event(&state, &actor, &id).await?;
     if r.revision as u32 != p.expected_revision {
         return Err(AppError::Conflict {
@@ -454,7 +588,9 @@ pub async fn update_event(State(state): State<AppState>, actor: Actor, Path(id):
     let before = json!({"title": r.title, "start": r.start(), "status": r.status, "override": r.override_()});
     if let Some(input) = &p.event {
         if s.kind != "local" {
-            return Err(AppError::bad("This event comes from a calendar Tendly reads but cannot edit. You can add a note, change its category or hide it here."));
+            return Err(AppError::bad(
+                "This event comes from a calendar Tendly reads but cannot edit. You can add a note, change its category or hide it here.",
+            ));
         }
         let e = input_to_ics(input, &state.config.default_timezone, &r.uid, r.sequence + 1)?;
         let tz = s.tz(&state.config.default_timezone);
@@ -540,7 +676,10 @@ pub async fn changes(State(state): State<AppState>, actor: Actor, Query(q): Quer
     for r in rows {
         let a: Activity = r.into();
         let source_of_event = if a.entity_type == "calendar_event" {
-            sqlx::query_scalar::<_, String>("SELECT source_id FROM calendar_events WHERE id = ?").bind(&a.entity_id).fetch_optional(&state.db).await?
+            sqlx::query_scalar::<_, String>("SELECT source_id FROM calendar_events WHERE id = ?")
+                .bind(&a.entity_id)
+                .fetch_optional(&state.db)
+                .await?
         } else {
             None
         };

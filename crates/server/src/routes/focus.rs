@@ -19,7 +19,8 @@ use tendly_core::timer::TimerState;
 use tendly_core::usage::{summarize, validate_percent, FIVE_HOUR_CHECKPOINTS, SEVEN_DAY_CHECKPOINTS};
 
 async fn load_timer(state: &AppState, member: &str) -> AppResult<(TimerState, u32)> {
-    let row: Option<(String, i64)> = sqlx::query_as("SELECT state, version FROM timers WHERE member_id = ?").bind(member).fetch_optional(&state.db).await?;
+    let row: Option<(String, i64)> =
+        sqlx::query_as("SELECT state, version FROM timers WHERE member_id = ?").bind(member).fetch_optional(&state.db).await?;
     Ok(match row {
         Some((s, v)) => (serde_json::from_str(&s).unwrap_or_default(), v as u32),
         None => (TimerState::default(), 0),
@@ -30,12 +31,13 @@ async fn save_timer(state: &AppState, member: &str, s: &TimerState, expected: u3
     let now = ts(state.now());
     let json = serde_json::to_string(s)?;
     if expected == 0 {
-        let res = sqlx::query("INSERT INTO timers (member_id, state, version, updated_at) VALUES (?,?,1,?) ON CONFLICT(member_id) DO NOTHING")
-            .bind(member)
-            .bind(&json)
-            .bind(&now)
-            .execute(&state.db)
-            .await?;
+        let res =
+            sqlx::query("INSERT INTO timers (member_id, state, version, updated_at) VALUES (?,?,1,?) ON CONFLICT(member_id) DO NOTHING")
+                .bind(member)
+                .bind(&json)
+                .bind(&now)
+                .execute(&state.db)
+                .await?;
         if res.rows_affected() == 1 {
             return Ok(1);
         }
@@ -63,7 +65,11 @@ pub async fn get_timer(State(state): State<AppState>, actor: Actor) -> AppResult
     Ok(Json(TimerView { remaining_ms: s.remaining_ms(now), state: s, server_now: now, version: v, phase_just_ended: ended }))
 }
 
-pub async fn timer_command(State(state): State<AppState>, actor: Actor, Json(input): Json<TimerCommandInput>) -> AppResult<Json<TimerView>> {
+pub async fn timer_command(
+    State(state): State<AppState>,
+    actor: Actor,
+    Json(input): Json<TimerCommandInput>,
+) -> AppResult<Json<TimerView>> {
     let (mut s, v) = load_timer(&state, &actor.id).await?;
     if let Some(expected) = input.expected_version {
         if expected != v {
@@ -72,7 +78,8 @@ pub async fn timer_command(State(state): State<AppState>, actor: Actor, Json(inp
     }
     let now = state.now();
     if let tendly_core::timer::TimerCommand::Start { task_id: Some(t), .. } = &input.command {
-        let exists: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM tasks WHERE id = ? AND deleted_at IS NULL").bind(t).fetch_one(&state.db).await?;
+        let exists: i64 =
+            sqlx::query_scalar("SELECT COUNT(*) FROM tasks WHERE id = ? AND deleted_at IS NULL").bind(t).fetch_one(&state.db).await?;
         if exists == 0 {
             return Err(AppError::field("taskId", "That task no longer exists."));
         }
@@ -147,13 +154,15 @@ pub async fn create_countdown(State(state): State<AppState>, actor: Actor, Json(
 }
 
 pub async fn delete_countdown(State(state): State<AppState>, actor: Actor, Path(id): Path<String>) -> AppResult<Json<Value>> {
-    let n = sqlx::query("DELETE FROM countdowns WHERE id = ? AND (member_id = ? OR group_id IN (SELECT group_id FROM group_members WHERE member_id = ?))")
-        .bind(&id)
-        .bind(&actor.id)
-        .bind(&actor.id)
-        .execute(&state.db)
-        .await?
-        .rows_affected();
+    let n = sqlx::query(
+        "DELETE FROM countdowns WHERE id = ? AND (member_id = ? OR group_id IN (SELECT group_id FROM group_members WHERE member_id = ?))",
+    )
+    .bind(&id)
+    .bind(&actor.id)
+    .bind(&actor.id)
+    .execute(&state.db)
+    .await?
+    .rows_affected();
     if n == 0 {
         return Err(AppError::NotFound("countdown"));
     }
@@ -219,7 +228,10 @@ async fn load_alarm(state: &AppState, actor: &Actor, id: &str) -> AppResult<Alar
 }
 
 pub async fn alarms(State(state): State<AppState>, actor: Actor) -> AppResult<Json<Vec<Alarm>>> {
-    let rows = sqlx::query_as::<_, AlarmRow>(&format!("{ALARM_SELECT} WHERE member_id = ? ORDER BY time")).bind(&actor.id).fetch_all(&state.db).await?;
+    let rows = sqlx::query_as::<_, AlarmRow>(&format!("{ALARM_SELECT} WHERE member_id = ? ORDER BY time"))
+        .bind(&actor.id)
+        .fetch_all(&state.db)
+        .await?;
     Ok(Json(rows.into_iter().map(to_alarm).collect()))
 }
 
@@ -260,7 +272,12 @@ pub async fn create_alarm(State(state): State<AppState>, actor: Actor, Json(i): 
     Ok(Json(load_alarm(&state, &actor, &id).await?))
 }
 
-pub async fn update_alarm(State(state): State<AppState>, actor: Actor, Path(id): Path<String>, Json(i): Json<AlarmInput>) -> AppResult<Json<Alarm>> {
+pub async fn update_alarm(
+    State(state): State<AppState>,
+    actor: Actor,
+    Path(id): Path<String>,
+    Json(i): Json<AlarmInput>,
+) -> AppResult<Json<Alarm>> {
     load_alarm(&state, &actor, &id).await?;
     let (label, time, date, tz) = check_alarm_input(&state, &i)?;
     let now = ts(state.now());
@@ -293,12 +310,21 @@ pub async fn alarm_fired(State(state): State<AppState>, actor: Actor, Path(id): 
     let a = load_alarm(&state, &actor, &id).await?;
     let now = state.now();
     if a.next_fire_at.map(|n| n <= now).unwrap_or(false) {
-        sqlx::query("UPDATE alarms SET last_fired_at = ?, snoozed_until = NULL WHERE id = ?").bind(ts(now)).bind(&id).execute(&state.db).await?;
+        sqlx::query("UPDATE alarms SET last_fired_at = ?, snoozed_until = NULL WHERE id = ?")
+            .bind(ts(now))
+            .bind(&id)
+            .execute(&state.db)
+            .await?;
     }
     Ok(Json(load_alarm(&state, &actor, &id).await?))
 }
 
-pub async fn alarm_snooze(State(state): State<AppState>, actor: Actor, Path(id): Path<String>, Json(i): Json<SnoozeInput>) -> AppResult<Json<Alarm>> {
+pub async fn alarm_snooze(
+    State(state): State<AppState>,
+    actor: Actor,
+    Path(id): Path<String>,
+    Json(i): Json<SnoozeInput>,
+) -> AppResult<Json<Alarm>> {
     load_alarm(&state, &actor, &id).await?;
     if !(1..=120).contains(&i.minutes) {
         return Err(AppError::field("minutes", "Snooze for 1 to 120 minutes."));
@@ -341,10 +367,11 @@ pub async fn put_usage(State(state): State<AppState>, actor: Actor, Json(i): Jso
     let mut thr: Vec<u8> = i.reminder_thresholds.iter().copied().filter(|t| (1..=100).contains(t)).collect();
     thr.sort_unstable();
     thr.dedup();
-    let old: Option<(Option<f64>, Option<f64>)> = sqlx::query_as("SELECT five_hour_percent, seven_day_percent FROM usage_tracker WHERE member_id = ?")
-        .bind(&actor.id)
-        .fetch_optional(&state.db)
-        .await?;
+    let old: Option<(Option<f64>, Option<f64>)> =
+        sqlx::query_as("SELECT five_hour_percent, seven_day_percent FROM usage_tracker WHERE member_id = ?")
+            .bind(&actor.id)
+            .fetch_optional(&state.db)
+            .await?;
     let now = state.now();
     sqlx::query(
         "INSERT INTO usage_tracker (member_id, five_hour_percent, five_hour_resets_at, seven_day_percent, seven_day_resets_at, notes, reminder_thresholds, remind_on_reset, updated_at) VALUES (?,?,?,?,?,?,?,?,?)
@@ -368,7 +395,16 @@ pub async fn put_usage(State(state): State<AppState>, actor: Actor, Json(i): Jso
     if !crossed.is_empty() {
         let mut conn = state.db.acquire().await?;
         let max = crossed.iter().max().copied().unwrap_or(0);
-        crate::routes::tasks::notify(&mut conn, &state, &actor.id, "usage", &format!("Claude usage estimate passed {max}% (manual entry)"), None, None).await?;
+        crate::routes::tasks::notify(
+            &mut conn,
+            &state,
+            &actor.id,
+            "usage",
+            &format!("Claude usage estimate passed {max}% (manual entry)"),
+            None,
+            None,
+        )
+        .await?;
     }
     usage(State(state), actor).await
 }

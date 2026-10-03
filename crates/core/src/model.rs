@@ -82,26 +82,15 @@ string_enum!(
 );
 
 /// Default Kanban columns for project groups. Groups can rename, add and reorder columns.
-pub const DEFAULT_BOARD_COLUMNS: &[(&str, &str)] = &[
-    ("backlog", "Backlog"),
-    ("planned", "Planned"),
-    ("in_progress", "In progress"),
-    ("blocked", "Blocked"),
-    ("done", "Done"),
-];
+pub const DEFAULT_BOARD_COLUMNS: &[(&str, &str)] =
+    &[("backlog", "Backlog"), ("planned", "Planned"), ("in_progress", "In progress"), ("blocked", "Blocked"), ("done", "Done")];
 
 /// The column key that marks a task as finished.
 pub const DONE_COLUMN: &str = "done";
 
 /// Validates a user-supplied display name. Names are attribution, not authentication.
 pub fn normalize_display_name(raw: &str) -> Result<String, &'static str> {
-    let cleaned: String = raw
-        .chars()
-        .filter(|c| !c.is_control())
-        .collect::<String>()
-        .split_whitespace()
-        .collect::<Vec<_>>()
-        .join(" ");
+    let cleaned: String = raw.chars().filter(|c| !c.is_control()).collect::<String>().split_whitespace().collect::<Vec<_>>().join(" ");
     if cleaned.is_empty() {
         return Err("Please enter a name.");
     }
@@ -113,10 +102,7 @@ pub fn normalize_display_name(raw: &str) -> Result<String, &'static str> {
 
 /// Trims and bounds free text such as titles. Control characters (except newlines when allowed) are dropped.
 pub fn clean_text(raw: &str, max_chars: usize, allow_newlines: bool) -> String {
-    let filtered: String = raw
-        .chars()
-        .filter(|c| !c.is_control() || (allow_newlines && *c == '\n'))
-        .collect();
+    let filtered: String = raw.chars().filter(|c| !c.is_control() || (allow_newlines && *c == '\n')).collect();
     let trimmed = filtered.trim();
     trimmed.chars().take(max_chars).collect()
 }

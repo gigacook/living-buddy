@@ -66,12 +66,14 @@ pub async fn list(State(state): State<AppState>, actor: Actor, Query(q): Query<L
     if !["pending", "accepted", "dismissed", "all"].contains(&status.as_str()) {
         return Err(AppError::field("status", "Unknown status."));
     }
-    let rows = sqlx::query_as::<_, SuggestionRow>(&format!("{SELECT} WHERE member_id = ? AND (? = 'all' OR status = ?) ORDER BY created_at DESC LIMIT 200"))
-        .bind(&actor.id)
-        .bind(&status)
-        .bind(&status)
-        .fetch_all(&state.db)
-        .await?;
+    let rows = sqlx::query_as::<_, SuggestionRow>(&format!(
+        "{SELECT} WHERE member_id = ? AND (? = 'all' OR status = ?) ORDER BY created_at DESC LIMIT 200"
+    ))
+    .bind(&actor.id)
+    .bind(&status)
+    .bind(&status)
+    .fetch_all(&state.db)
+    .await?;
     Ok(Json(rows.into_iter().filter_map(|r| Suggestion::try_from(r).ok()).collect()))
 }
 
@@ -87,7 +89,12 @@ async fn load_for(state: &AppState, actor: &Actor, id: &str) -> AppResult<Sugges
 
 /// Paste an email or message to get suggestions. Uses local rules unless the
 /// administrator allowed AI for pasted text and a provider is configured.
-pub async fn intake(State(state): State<AppState>, ctx: RequestCtx, actor: Actor, Json(i): Json<IntakeInput>) -> AppResult<Json<IntakeResult>> {
+pub async fn intake(
+    State(state): State<AppState>,
+    ctx: RequestCtx,
+    actor: Actor,
+    Json(i): Json<IntakeInput>,
+) -> AppResult<Json<IntakeResult>> {
     if !state.limiter.check("intake", ctx.peer, 60, 3600, state.now()) {
         return Err(AppError::RateLimited);
     }
@@ -110,7 +117,10 @@ pub async fn intake(State(state): State<AppState>, ctx: RequestCtx, actor: Actor
             match crate::ai::extract(&state, &provider, &msg).await {
                 Ok(d) => (d, provider.label()),
                 Err(e) => {
-                    notice = Some(format!("The AI provider was not available ({}); local rules were used instead.", tendly_core::redact::redact(&e.to_string())));
+                    notice = Some(format!(
+                        "The AI provider was not available ({}); local rules were used instead.",
+                        tendly_core::redact::redact(&e.to_string())
+                    ));
                     (heuristic_extract(&msg), "rules (AI unavailable)".into())
                 }
             }
@@ -143,10 +153,11 @@ pub async fn intake(State(state): State<AppState>, ctx: RequestCtx, actor: Actor
 }
 
 async fn default_local_source(state: &AppState, actor: &Actor) -> AppResult<String> {
-    let existing: Option<String> = sqlx::query_scalar("SELECT id FROM calendar_sources WHERE kind = 'local' AND owner_id = ? ORDER BY created_at LIMIT 1")
-        .bind(&actor.id)
-        .fetch_optional(&state.db)
-        .await?;
+    let existing: Option<String> =
+        sqlx::query_scalar("SELECT id FROM calendar_sources WHERE kind = 'local' AND owner_id = ? ORDER BY created_at LIMIT 1")
+            .bind(&actor.id)
+            .fetch_optional(&state.db)
+            .await?;
     if let Some(id) = existing {
         return Ok(id);
     }
@@ -165,14 +176,20 @@ async fn default_local_source(state: &AppState, actor: &Actor) -> AppResult<Stri
 
 /// The explicit confirmation step: creates exactly one task or event from
 /// the (possibly edited) suggestion. No other side effects.
-pub async fn accept(State(state): State<AppState>, actor: Actor, Path(id): Path<String>, Json(i): Json<AcceptSuggestionInput>) -> AppResult<Json<Suggestion>> {
+pub async fn accept(
+    State(state): State<AppState>,
+    actor: Actor,
+    Path(id): Path<String>,
+    Json(i): Json<AcceptSuggestionInput>,
+) -> AppResult<Json<Suggestion>> {
     let s = load_for(&state, &actor, &id).await?;
     if s.status != "pending" {
         return Err(AppError::bad("This suggestion was already handled."));
     }
     let (result_type, result_id) = match i.create_as.as_str() {
         "task" => {
-            let notes = validate::opt_text(i.notes.as_deref(), 4000, true).or_else(|| s.draft.evidence.clone().map(|e| format!("From “{}”: {e}", s.subject)));
+            let notes = validate::opt_text(i.notes.as_deref(), 4000, true)
+                .or_else(|| s.draft.evidence.clone().map(|e| format!("From “{}”: {e}", s.subject)));
             let t = create_task(
                 &state,
                 &actor,
@@ -252,14 +269,22 @@ pub async fn dismiss(State(state): State<AppState>, actor: Actor, Path(id): Path
 }
 
 pub async fn connectors(State(state): State<AppState>, actor: Actor) -> AppResult<Json<Vec<ConnectorSummary>>> {
-    let rows: Vec<(String, String, String, i64, String, Option<String>)> =
-        sqlx::query_as("SELECT id, provider, display_name, enabled, status, last_run_at FROM connectors WHERE owner_member_id = ? ORDER BY created_at")
-            .bind(&actor.id)
-            .fetch_all(&state.db)
-            .await?;
+    let rows: Vec<(String, String, String, i64, String, Option<String>)> = sqlx::query_as(
+        "SELECT id, provider, display_name, enabled, status, last_run_at FROM connectors WHERE owner_member_id = ? ORDER BY created_at",
+    )
+    .bind(&actor.id)
+    .fetch_all(&state.db)
+    .await?;
     Ok(Json(
         rows.into_iter()
-            .map(|(id, provider, display_name, enabled, status, last)| ConnectorSummary { id, provider, display_name, enabled: enabled != 0, status, last_run_at: parse_ts_opt(last) })
+            .map(|(id, provider, display_name, enabled, status, last)| ConnectorSummary {
+                id,
+                provider,
+                display_name,
+                enabled: enabled != 0,
+                status,
+                last_run_at: parse_ts_opt(last),
+            })
             .collect(),
     ))
 }
@@ -274,6 +299,9 @@ pub fn kind_label(k: SuggestionKind) -> &'static str {
 }
 
 pub async fn counts(State(state): State<AppState>, actor: Actor) -> AppResult<Json<Value>> {
-    let n: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM suggestions WHERE member_id = ? AND status = 'pending'").bind(&actor.id).fetch_one(&state.db).await?;
+    let n: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM suggestions WHERE member_id = ? AND status = 'pending'")
+        .bind(&actor.id)
+        .fetch_one(&state.db)
+        .await?;
     Ok(Json(json!({"pending": n})))
 }

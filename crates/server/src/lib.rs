@@ -1,6 +1,9 @@
 //! Tendly server library: HTTP API, worker and storage. The same router is
 //! used by `tendly serve` and, in-process, by the native (Tauri) shell.
 
+// SQL rows are read as plain tuples next to their queries; naming each one adds noise.
+#![allow(clippy::type_complexity)]
+
 pub mod activity;
 pub mod ai;
 pub mod backup;

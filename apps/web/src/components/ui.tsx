@@ -29,6 +29,10 @@ export function Dialog({ open, onClose, title, children, footer, wide }: DialogP
       opener.current = document.activeElement;
       if (typeof d.showModal === "function") d.showModal();
       else d.setAttribute("open", "");
+      // showModal() focuses the first focusable element (the close button).
+      // Prefer an explicitly marked control, then the first form field.
+      const target = d.querySelector<HTMLElement>("[data-autofocus]") ?? d.querySelector<HTMLElement>(".dialog-body input:not([type=hidden]):not([type=checkbox]):not([type=radio]), .dialog-body textarea, .dialog-body select");
+      target?.focus();
     } else if (!open && d.open) {
       if (typeof d.close === "function") d.close();
       else d.removeAttribute("open");

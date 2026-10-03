@@ -119,7 +119,8 @@ fn v6_blocked(ip: Ipv6Addr) -> bool {
         || (s[0] & 0xffc0) == 0xfec0 // site local (deprecated)
         || s[0] == 0x2001 && s[1] == 0x0db8 // documentation
         || s[0] == 0x2002 // 6to4 can tunnel to private v4
-        || (s[0] == 0 && s[1] == 0 && s[2] == 0 && s[3] == 0 && s[4] == 0 && s[5] == 0) // IPv4-compatible
+        || (s[0] == 0 && s[1] == 0 && s[2] == 0 && s[3] == 0 && s[4] == 0 && s[5] == 0)
+    // IPv4-compatible
 }
 
 pub fn ip_allowed(ip: IpAddr, trusted: &[IpNet]) -> bool {
@@ -151,7 +152,12 @@ async fn resolve_checked(url: &Url, policy: &FetchPolicy) -> Result<Vec<SocketAd
     Ok(addrs)
 }
 
-pub async fn fetch_calendar(raw_url: &str, policy: &FetchPolicy, etag: Option<&str>, last_modified: Option<&str>) -> Result<Fetched, FetchError> {
+pub async fn fetch_calendar(
+    raw_url: &str,
+    policy: &FetchPolicy,
+    etag: Option<&str>,
+    last_modified: Option<&str>,
+) -> Result<Fetched, FetchError> {
     let mut url = validate_url(raw_url)?;
     for _ in 0..=policy.max_redirects {
         let addrs = resolve_checked(&url, policy).await?;
@@ -175,7 +181,10 @@ pub async fn fetch_calendar(raw_url: &str, policy: &FetchPolicy, etag: Option<&s
         if let Some(lm) = last_modified {
             req = req.header("if-modified-since", lm);
         }
-        let resp = req.send().await.map_err(|e| FetchError::Network(if e.is_timeout() { "timed out".into() } else { "connection failed".into() }))?;
+        let resp = req
+            .send()
+            .await
+            .map_err(|e| FetchError::Network(if e.is_timeout() { "timed out".into() } else { "connection failed".into() }))?;
         let status = resp.status();
         if status.is_redirection() && status.as_u16() != 304 {
             let loc = resp.headers().get("location").and_then(|v| v.to_str().ok()).ok_or(FetchError::Status(status.as_u16()))?;
@@ -184,7 +193,12 @@ pub async fn fetch_calendar(raw_url: &str, policy: &FetchPolicy, etag: Option<&s
             continue;
         }
         if status.as_u16() == 304 {
-            return Ok(Fetched { body: None, etag: etag.map(String::from), last_modified: last_modified.map(String::from), not_modified: true });
+            return Ok(Fetched {
+                body: None,
+                etag: etag.map(String::from),
+                last_modified: last_modified.map(String::from),
+                not_modified: true,
+            });
         }
         if !status.is_success() {
             return Err(FetchError::Status(status.as_u16()));
@@ -228,9 +242,23 @@ mod tests {
     #[test]
     fn address_policy() {
         let blocked = [
-            "127.0.0.1", "10.1.2.3", "192.168.0.10", "172.16.5.4", "169.254.169.254", "100.64.0.1", "0.0.0.0",
-            "::1", "fd00::1", "fe80::1", "::ffff:127.0.0.1", "::ffff:169.254.169.254", "64:ff9b::a9fe:a9fe", "2002:7f00:1::1",
-            "198.18.0.1", "255.255.255.255", "224.0.0.1",
+            "127.0.0.1",
+            "10.1.2.3",
+            "192.168.0.10",
+            "172.16.5.4",
+            "169.254.169.254",
+            "100.64.0.1",
+            "0.0.0.0",
+            "::1",
+            "fd00::1",
+            "fe80::1",
+            "::ffff:127.0.0.1",
+            "::ffff:169.254.169.254",
+            "64:ff9b::a9fe:a9fe",
+            "2002:7f00:1::1",
+            "198.18.0.1",
+            "255.255.255.255",
+            "224.0.0.1",
         ];
         for b in blocked {
             assert!(!ip_allowed(b.parse().unwrap(), &[]), "{b} should be blocked");
@@ -256,7 +284,8 @@ mod tests {
 
     #[tokio::test]
     async fn blocks_loopback_by_default_and_fetches_when_trusted() {
-        let addr = serve(Router::new().route("/cal.ics", get(|| async { ([("etag", "\"v1\"")], "BEGIN:VCALENDAR\r\nEND:VCALENDAR\r\n") }))).await;
+        let addr =
+            serve(Router::new().route("/cal.ics", get(|| async { ([("etag", "\"v1\"")], "BEGIN:VCALENDAR\r\nEND:VCALENDAR\r\n") }))).await;
         let url = format!("http://{addr}/cal.ics");
         assert_eq!(fetch_calendar(&url, &FetchPolicy::default(), None, None).await.err(), Some(FetchError::BlockedAddress));
         let got = fetch_calendar(&url, &trusted_local(), None, None).await.unwrap();
@@ -285,6 +314,9 @@ mod tests {
         .await;
         let small = FetchPolicy { max_bytes: 1000, ..trusted_local() };
         assert_eq!(fetch_calendar(&format!("http://{addr}/big"), &small, None, None).await.err(), Some(FetchError::TooLarge));
-        assert_eq!(fetch_calendar(&format!("http://{addr}/loop"), &trusted_local(), None, None).await.err(), Some(FetchError::TooManyRedirects));
+        assert_eq!(
+            fetch_calendar(&format!("http://{addr}/loop"), &trusted_local(), None, None).await.err(),
+            Some(FetchError::TooManyRedirects)
+        );
     }
 }

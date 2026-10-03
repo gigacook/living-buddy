@@ -69,7 +69,9 @@ enum DeviceCmd {
 #[tokio::main]
 async fn main() -> Result<()> {
     tracing_subscriber::fmt()
-        .with_env_filter(tracing_subscriber::EnvFilter::try_from_env("TENDLY_LOG").unwrap_or_else(|_| "info,sqlx=warn,tower_http=warn".into()))
+        .with_env_filter(
+            tracing_subscriber::EnvFilter::try_from_env("TENDLY_LOG").unwrap_or_else(|_| "info,sqlx=warn,tower_http=warn".into()),
+        )
         .with_target(false)
         .init();
     let cli = Cli::parse();
@@ -146,9 +148,15 @@ async fn main() -> Result<()> {
             }
             DeviceCmd::List => {
                 let rows: Vec<(String, String, Option<String>, Option<String>)> =
-                    sqlx::query_as("SELECT id, name, last_seen_at, revoked_at FROM devices ORDER BY created_at").fetch_all(&state.db).await?;
+                    sqlx::query_as("SELECT id, name, last_seen_at, revoked_at FROM devices ORDER BY created_at")
+                        .fetch_all(&state.db)
+                        .await?;
                 for (id, name, seen, revoked) in rows {
-                    println!("{id}\t{name}\tlast seen: {}\t{}", seen.unwrap_or_else(|| "never".into()), if revoked.is_some() { "REVOKED" } else { "active" });
+                    println!(
+                        "{id}\t{name}\tlast seen: {}\t{}",
+                        seen.unwrap_or_else(|| "never".into()),
+                        if revoked.is_some() { "REVOKED" } else { "active" }
+                    );
                 }
             }
             DeviceCmd::Revoke { id } => {

@@ -10,10 +10,7 @@
 //! Expansion happens in local wall-clock time and is converted to UTC per
 //! occurrence, which keeps "every Monday at 09:00" at 09:00 across DST changes.
 
-use chrono::{
-    DateTime, Datelike, Duration, LocalResult, NaiveDate, NaiveDateTime, Offset, TimeZone, Utc,
-    Weekday,
-};
+use chrono::{DateTime, Datelike, Duration, LocalResult, NaiveDate, NaiveDateTime, Offset, TimeZone, Utc, Weekday};
 use chrono_tz::Tz;
 use std::fmt;
 
@@ -95,9 +92,7 @@ pub fn parse_basic_datetime(v: &str) -> Option<Until> {
         return NaiveDate::parse_from_str(v, "%Y%m%d").ok().map(Until::Date);
     }
     if let Some(stripped) = v.strip_suffix('Z') {
-        return NaiveDateTime::parse_from_str(stripped, "%Y%m%dT%H%M%S")
-            .ok()
-            .map(|n| Until::Utc(Utc.from_utc_datetime(&n)));
+        return NaiveDateTime::parse_from_str(stripped, "%Y%m%dT%H%M%S").ok().map(|n| Until::Utc(Utc.from_utc_datetime(&n)));
     }
     NaiveDateTime::parse_from_str(v, "%Y%m%dT%H%M%S").ok().map(Until::Local)
 }
@@ -122,9 +117,7 @@ impl RRule {
         let mut freq = None;
         let mut rule = RRule::new(Freq::Daily);
         for part in input.split(';').filter(|p| !p.is_empty()) {
-            let (key, value) = part
-                .split_once('=')
-                .ok_or_else(|| RRuleError::Invalid(part.to_string()))?;
+            let (key, value) = part.split_once('=').ok_or_else(|| RRuleError::Invalid(part.to_string()))?;
             let key = key.trim().to_ascii_uppercase();
             let value = value.trim();
             match key.as_str() {
@@ -134,9 +127,7 @@ impl RRule {
                         "WEEKLY" => Freq::Weekly,
                         "MONTHLY" => Freq::Monthly,
                         "YEARLY" => Freq::Yearly,
-                        "HOURLY" | "MINUTELY" | "SECONDLY" => {
-                            return Err(RRuleError::Unsupported(format!("FREQ={value}")))
-                        }
+                        "HOURLY" | "MINUTELY" | "SECONDLY" => return Err(RRuleError::Unsupported(format!("FREQ={value}"))),
                         _ => return Err(RRuleError::Invalid("FREQ".into())),
                     })
                 }
@@ -156,12 +147,7 @@ impl RRule {
                             .ok_or_else(|| RRuleError::Invalid("COUNT".into()))?,
                     )
                 }
-                "UNTIL" => {
-                    rule.until = Some(
-                        parse_basic_datetime(value)
-                            .ok_or_else(|| RRuleError::Invalid("UNTIL".into()))?,
-                    )
-                }
+                "UNTIL" => rule.until = Some(parse_basic_datetime(value).ok_or_else(|| RRuleError::Invalid("UNTIL".into()))?),
                 "BYDAY" => {
                     for item in value.split(',') {
                         let item = item.trim().to_ascii_uppercase();
@@ -169,15 +155,11 @@ impl RRule {
                             return Err(RRuleError::Invalid("BYDAY".into()));
                         }
                         let (num, day) = item.split_at(item.len() - 2);
-                        let weekday =
-                            parse_weekday(day).ok_or_else(|| RRuleError::Invalid("BYDAY".into()))?;
+                        let weekday = parse_weekday(day).ok_or_else(|| RRuleError::Invalid("BYDAY".into()))?;
                         let ordinal = if num.is_empty() {
                             None
                         } else {
-                            let n: i32 = num
-                                .trim_start_matches('+')
-                                .parse()
-                                .map_err(|_| RRuleError::Invalid("BYDAY".into()))?;
+                            let n: i32 = num.trim_start_matches('+').parse().map_err(|_| RRuleError::Invalid("BYDAY".into()))?;
                             if n == 0 || n.abs() > 53 {
                                 return Err(RRuleError::Invalid("BYDAY".into()));
                             }
@@ -208,10 +190,7 @@ impl RRule {
                         rule.by_month.push(n);
                     }
                 }
-                "WKST" => {
-                    rule.week_start = parse_weekday(&value.to_ascii_uppercase())
-                        .ok_or_else(|| RRuleError::Invalid("WKST".into()))?
-                }
+                "WKST" => rule.week_start = parse_weekday(&value.to_ascii_uppercase()).ok_or_else(|| RRuleError::Invalid("WKST".into()))?,
                 k if k.starts_with("X-") => {}
                 other => return Err(RRuleError::Unsupported(other.to_string())),
             }
@@ -220,10 +199,8 @@ impl RRule {
         if rule.count.is_some() && rule.until.is_some() {
             return Err(RRuleError::Invalid("COUNT and UNTIL together".into()));
         }
-        if rule.freq == Freq::Daily || rule.freq == Freq::Weekly {
-            if rule.by_day.iter().any(|d| d.ordinal.is_some()) {
-                return Err(RRuleError::Invalid("BYDAY ordinal with DAILY/WEEKLY".into()));
-            }
+        if (rule.freq == Freq::Daily || rule.freq == Freq::Weekly) && rule.by_day.iter().any(|d| d.ordinal.is_some()) {
+            return Err(RRuleError::Invalid("BYDAY ordinal with DAILY/WEEKLY".into()));
         }
         rule.by_month.sort_unstable();
         rule.by_month.dedup();
@@ -238,11 +215,7 @@ impl RRule {
             Freq::Monthly => "month",
             Freq::Yearly => "year",
         };
-        let mut s = if self.interval == 1 {
-            format!("Every {unit}")
-        } else {
-            format!("Every {} {unit}s", self.interval)
-        };
+        let mut s = if self.interval == 1 { format!("Every {unit}") } else { format!("Every {} {unit}s", self.interval) };
         if !self.by_day.is_empty() {
             let days: Vec<String> = self
                 .by_day
@@ -269,11 +242,8 @@ impl RRule {
             s.push_str(&days.join(", "));
         }
         if !self.by_month_day.is_empty() {
-            let days: Vec<String> = self
-                .by_month_day
-                .iter()
-                .map(|d| if *d == -1 { "last day".into() } else { format!("day {d}") })
-                .collect();
+            let days: Vec<String> =
+                self.by_month_day.iter().map(|d| if *d == -1 { "last day".into() } else { format!("day {d}") }).collect();
             s.push_str(" on ");
             s.push_str(&days.join(", "));
         }
@@ -335,9 +305,7 @@ impl RRule {
                 }
             }
             // Stop when the period itself is entirely past the window.
-            if self.period_start(start.date(), k as i64).map(|p| p.and_time(time) > window_end)
-                == Some(true)
-            {
+            if self.period_start(start.date(), k as i64).map(|p| p.and_time(time) > window_end) == Some(true) {
                 return out;
             }
         }
@@ -365,19 +333,17 @@ impl RRule {
                 let d = start.checked_add_signed(Duration::days(step))?;
                 let ok_day = self.by_day.is_empty() || self.by_day.iter().any(|w| w.weekday == d.weekday());
                 let ok_md = self.by_month_day.is_empty() || month_day_matches(d, &self.by_month_day);
-                if ok_day && ok_md { vec![d] } else { vec![] }
+                if ok_day && ok_md {
+                    vec![d]
+                } else {
+                    vec![]
+                }
             }
             Freq::Weekly => {
                 let ws = week_start(start, self.week_start).checked_add_signed(Duration::weeks(step))?;
-                let wanted: Vec<Weekday> = if self.by_day.is_empty() {
-                    vec![start.weekday()]
-                } else {
-                    self.by_day.iter().map(|w| w.weekday).collect()
-                };
-                (0..7)
-                    .filter_map(|i| ws.checked_add_signed(Duration::days(i)))
-                    .filter(|d| wanted.contains(&d.weekday()))
-                    .collect()
+                let wanted: Vec<Weekday> =
+                    if self.by_day.is_empty() { vec![start.weekday()] } else { self.by_day.iter().map(|w| w.weekday).collect() };
+                (0..7).filter_map(|i| ws.checked_add_signed(Duration::days(i))).filter(|d| wanted.contains(&d.weekday())).collect()
             }
             Freq::Monthly => {
                 let (y, m) = add_months(start.year(), start.month(), step)?;
@@ -428,10 +394,8 @@ impl RRule {
         if !self.by_day.is_empty() {
             let mut v = Vec::new();
             for wd in &self.by_day {
-                let all: Vec<NaiveDate> = (1..=len)
-                    .filter_map(|d| NaiveDate::from_ymd_opt(y, m, d))
-                    .filter(|d| d.weekday() == wd.weekday)
-                    .collect();
+                let all: Vec<NaiveDate> =
+                    (1..=len).filter_map(|d| NaiveDate::from_ymd_opt(y, m, d)).filter(|d| d.weekday() == wd.weekday).collect();
                 match wd.ordinal {
                     None => v.extend(all),
                     Some(n) if n > 0 => v.extend(all.get((n - 1) as usize).copied()),
@@ -556,11 +520,7 @@ fn year_weekday_dates(y: i32, by_day: &[WeekdayNum]) -> Vec<NaiveDate> {
     let Some(first) = NaiveDate::from_ymd_opt(y, 1, 1) else { return v };
     let Some(last) = NaiveDate::from_ymd_opt(y, 12, 31) else { return v };
     for wd in by_day {
-        let all: Vec<NaiveDate> = first
-            .iter_days()
-            .take_while(|d| *d <= last)
-            .filter(|d| d.weekday() == wd.weekday)
-            .collect();
+        let all: Vec<NaiveDate> = first.iter_days().take_while(|d| *d <= last).filter(|d| d.weekday() == wd.weekday).collect();
         match wd.ordinal {
             None => v.extend(all),
             Some(n) if n > 0 => v.extend(all.get((n - 1) as usize).copied()),

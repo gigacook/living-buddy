@@ -25,7 +25,13 @@ pub struct Job {
     pub max_attempts: i64,
 }
 
-pub async fn enqueue(state: &AppState, kind: &str, payload: Value, idempotency_key: Option<&str>, run_after: DateTime<Utc>) -> Result<bool> {
+pub async fn enqueue(
+    state: &AppState,
+    kind: &str,
+    payload: Value,
+    idempotency_key: Option<&str>,
+    run_after: DateTime<Utc>,
+) -> Result<bool> {
     let now = ts(state.now());
     let res = sqlx::query("INSERT OR IGNORE INTO jobs (id, kind, payload, status, attempts, max_attempts, run_after, idempotency_key, created_at, updated_at) VALUES (?,?,?,'queued',0,5,?,?,?,?)")
         .bind(new_id())
@@ -109,12 +115,26 @@ pub async fn run_job(state: &AppState, job: &Job) -> Result<()> {
                 Ok(stats) => {
                     if stats.inserted + stats.updated + stats.cancelled > 0 {
                         let mut conn = state.db.acquire().await?;
-                        crate::activity::record(&mut conn, &ts(state.now()), crate::activity::NewActivity {
-                            actor: None, source: &format!("poll:{}", source.name), entity_type: "calendar_source", entity_id: &source.id,
-                            group_id: source.group_id.as_deref(), op: "poll",
-                            summary: format!("Scheduled refresh of “{}”: {} new, {} changed, {} removed", source.name, stats.inserted, stats.updated, stats.cancelled),
-                            revision: 0, before: None, after: None,
-                        }).await?;
+                        crate::activity::record(
+                            &mut conn,
+                            &ts(state.now()),
+                            crate::activity::NewActivity {
+                                actor: None,
+                                source: &format!("poll:{}", source.name),
+                                entity_type: "calendar_source",
+                                entity_id: &source.id,
+                                group_id: source.group_id.as_deref(),
+                                op: "poll",
+                                summary: format!(
+                                    "Scheduled refresh of “{}”: {} new, {} changed, {} removed",
+                                    source.name, stats.inserted, stats.updated, stats.cancelled
+                                ),
+                                revision: 0,
+                                before: None,
+                                after: None,
+                            },
+                        )
+                        .await?;
                     }
                     finish(state, job).await
                 }
@@ -123,8 +143,14 @@ pub async fn run_job(state: &AppState, job: &Job) -> Result<()> {
         }
         "retention" => {
             crate::connectors::apply_retention(state).await?;
-            sqlx::query("DELETE FROM jobs WHERE status IN ('done','dead') AND updated_at < ?").bind(ts(state.now() - Duration::days(14))).execute(&state.db).await?;
-            sqlx::query("DELETE FROM oauth_states WHERE created_at < ?").bind(ts(state.now() - Duration::hours(1))).execute(&state.db).await?;
+            sqlx::query("DELETE FROM jobs WHERE status IN ('done','dead') AND updated_at < ?")
+                .bind(ts(state.now() - Duration::days(14)))
+                .execute(&state.db)
+                .await?;
+            sqlx::query("DELETE FROM oauth_states WHERE created_at < ?")
+                .bind(ts(state.now() - Duration::hours(1)))
+                .execute(&state.db)
+                .await?;
             finish(state, job).await
         }
         other => fail(state, job, &format!("unknown job kind {other}"), false, None).await,
@@ -137,7 +163,9 @@ pub async fn schedule_due(state: &AppState) -> Result<u32> {
     let now = state.now();
     let mut n = 0;
     let connectors: Vec<(String, Option<String>, i64, i64, String)> =
-        sqlx::query_as("SELECT id, last_run_at, poll_minutes, consecutive_failures, status FROM connectors WHERE enabled = 1").fetch_all(&state.db).await?;
+        sqlx::query_as("SELECT id, last_run_at, poll_minutes, consecutive_failures, status FROM connectors WHERE enabled = 1")
+            .fetch_all(&state.db)
+            .await?;
     for (id, last, poll, failures, status) in connectors {
         if status == "needs_auth" || status == "error" {
             continue;
@@ -154,7 +182,9 @@ pub async fn schedule_due(state: &AppState) -> Result<u32> {
         }
     }
     let sources: Vec<(String, Option<String>, i64)> =
-        sqlx::query_as("SELECT id, last_fetched_at, refresh_minutes FROM calendar_sources WHERE kind = 'url' AND enabled = 1").fetch_all(&state.db).await?;
+        sqlx::query_as("SELECT id, last_fetched_at, refresh_minutes FROM calendar_sources WHERE kind = 'url' AND enabled = 1")
+            .fetch_all(&state.db)
+            .await?;
     for (id, last, every) in sources {
         let every = every.clamp(15, 24 * 60);
         let due = last.map(|l| parse_ts(&l) + Duration::minutes(every) <= now).unwrap_or(true);

@@ -87,11 +87,7 @@ pub fn dedupe(candidates: &[MergeCandidate]) -> Vec<MergedPick> {
                 .then(a.id.cmp(&b.id))
         });
         let winner = group[0];
-        let mut also: Vec<String> = group[1..]
-            .iter()
-            .map(|c| c.source_id.clone())
-            .filter(|s| *s != winner.source_id)
-            .collect();
+        let mut also: Vec<String> = group[1..].iter().map(|c| c.source_id.clone()).filter(|s| *s != winner.source_id).collect();
         also.sort();
         also.dedup();
         out.push(MergedPick { winner_id: winner.id.clone(), also_in: also });

@@ -31,10 +31,12 @@ struct GroupRow {
 const SELECT: &str = "SELECT id, name, kind, mode, description, goal, start_date, end_date, columns, archived, created_at FROM tgroups";
 
 async fn hydrate(state: &AppState, r: GroupRow) -> AppResult<Group> {
-    let member_ids: Vec<String> = sqlx::query_scalar("SELECT gm.member_id FROM group_members gm JOIN members m ON m.id = gm.member_id WHERE gm.group_id = ? ORDER BY m.created_at")
-        .bind(&r.id)
-        .fetch_all(&state.db)
-        .await?;
+    let member_ids: Vec<String> = sqlx::query_scalar(
+        "SELECT gm.member_id FROM group_members gm JOIN members m ON m.id = gm.member_id WHERE gm.group_id = ? ORDER BY m.created_at",
+    )
+    .bind(&r.id)
+    .fetch_all(&state.db)
+    .await?;
     let milestones = sqlx::query_as::<_, (String, String, Option<String>, i64)>(
         "SELECT id, title, due_date, done FROM milestones WHERE group_id = ? ORDER BY COALESCE(due_date, '9999'), position",
     )
@@ -198,7 +200,12 @@ fn slug(name: &str) -> String {
     }
 }
 
-pub async fn update(State(state): State<AppState>, actor: Actor, Path(id): Path<String>, Json(p): Json<GroupPatch>) -> AppResult<Json<Group>> {
+pub async fn update(
+    State(state): State<AppState>,
+    actor: Actor,
+    Path(id): Path<String>,
+    Json(p): Json<GroupPatch>,
+) -> AppResult<Json<Group>> {
     ensure_member(&state, &id, &actor).await?;
     let current = load(&state, &id).await?;
     let mut tx = state.db.begin().await?;
@@ -210,16 +217,32 @@ pub async fn update(State(state): State<AppState>, actor: Actor, Path(id): Path<
         sqlx::query("UPDATE tgroups SET kind = ? WHERE id = ?").bind(k.as_str()).bind(&id).execute(&mut *tx).await?;
     }
     if let Some(d) = &p.description {
-        sqlx::query("UPDATE tgroups SET description = ? WHERE id = ?").bind(validate::opt_text(Some(d), 500, true)).bind(&id).execute(&mut *tx).await?;
+        sqlx::query("UPDATE tgroups SET description = ? WHERE id = ?")
+            .bind(validate::opt_text(Some(d), 500, true))
+            .bind(&id)
+            .execute(&mut *tx)
+            .await?;
     }
     if let Some(g) = &p.goal {
-        sqlx::query("UPDATE tgroups SET goal = ? WHERE id = ?").bind(validate::opt_text(Some(g), 300, true)).bind(&id).execute(&mut *tx).await?;
+        sqlx::query("UPDATE tgroups SET goal = ? WHERE id = ?")
+            .bind(validate::opt_text(Some(g), 300, true))
+            .bind(&id)
+            .execute(&mut *tx)
+            .await?;
     }
     if let Some(s) = &p.start_date {
-        sqlx::query("UPDATE tgroups SET start_date = ? WHERE id = ?").bind(validate::date("startDate", Some(s))?).bind(&id).execute(&mut *tx).await?;
+        sqlx::query("UPDATE tgroups SET start_date = ? WHERE id = ?")
+            .bind(validate::date("startDate", Some(s))?)
+            .bind(&id)
+            .execute(&mut *tx)
+            .await?;
     }
     if let Some(e) = &p.end_date {
-        sqlx::query("UPDATE tgroups SET end_date = ? WHERE id = ?").bind(validate::date("endDate", Some(e))?).bind(&id).execute(&mut *tx).await?;
+        sqlx::query("UPDATE tgroups SET end_date = ? WHERE id = ?")
+            .bind(validate::date("endDate", Some(e))?)
+            .bind(&id)
+            .execute(&mut *tx)
+            .await?;
     }
     if let Some(a) = p.archived {
         sqlx::query("UPDATE tgroups SET archived = ? WHERE id = ?").bind(a as i64).bind(&id).execute(&mut *tx).await?;
@@ -231,13 +254,29 @@ pub async fn update(State(state): State<AppState>, actor: Actor, Path(id): Path<
         validate_members(&state, members).await?;
         sqlx::query("DELETE FROM group_members WHERE group_id = ?").bind(&id).execute(&mut *tx).await?;
         for m in members {
-            sqlx::query("INSERT OR IGNORE INTO group_members (group_id, member_id) VALUES (?, ?)").bind(&id).bind(m).execute(&mut *tx).await?;
+            sqlx::query("INSERT OR IGNORE INTO group_members (group_id, member_id) VALUES (?, ?)")
+                .bind(&id)
+                .bind(m)
+                .execute(&mut *tx)
+                .await?;
         }
-        record(&mut tx, &now, NewActivity {
-            actor: Some(&actor), source: "app", entity_type: "group", entity_id: &id, group_id: Some(&id), op: "members",
-            summary: format!("{} updated who is in “{}”", actor.name, current.name), revision: 0,
-            before: Some(json!(current.member_ids)), after: Some(json!(members)),
-        }).await?;
+        record(
+            &mut tx,
+            &now,
+            NewActivity {
+                actor: Some(&actor),
+                source: "app",
+                entity_type: "group",
+                entity_id: &id,
+                group_id: Some(&id),
+                op: "members",
+                summary: format!("{} updated who is in “{}”", actor.name, current.name),
+                revision: 0,
+                before: Some(json!(current.member_ids)),
+                after: Some(json!(members)),
+            },
+        )
+        .await?;
     }
     if let Some(cols) = &p.columns {
         if current.mode != GroupMode::Project {
@@ -261,13 +300,18 @@ pub async fn update(State(state): State<AppState>, actor: Actor, Path(id): Path<
         // Tasks in removed columns move to the first column rather than disappearing.
         let first = out[0].key.clone();
         let keys: Vec<String> = out.iter().map(|c| c.key.clone()).collect();
-        let in_group: Vec<(String, Option<String>)> = sqlx::query_as("SELECT id, column_key FROM tasks WHERE group_id = ? AND deleted_at IS NULL")
-            .bind(&id)
-            .fetch_all(&mut *tx)
-            .await?;
+        let in_group: Vec<(String, Option<String>)> =
+            sqlx::query_as("SELECT id, column_key FROM tasks WHERE group_id = ? AND deleted_at IS NULL")
+                .bind(&id)
+                .fetch_all(&mut *tx)
+                .await?;
         for (tid, col) in in_group {
             if col.map(|c| !keys.contains(&c)).unwrap_or(true) {
-                sqlx::query("UPDATE tasks SET column_key = ?, version = version + 1 WHERE id = ?").bind(&first).bind(&tid).execute(&mut *tx).await?;
+                sqlx::query("UPDATE tasks SET column_key = ?, version = version + 1 WHERE id = ?")
+                    .bind(&first)
+                    .bind(&tid)
+                    .execute(&mut *tx)
+                    .await?;
             }
         }
         sqlx::query("UPDATE tgroups SET columns = ? WHERE id = ?").bind(serde_json::to_string(&out)?).bind(&id).execute(&mut *tx).await?;
@@ -281,11 +325,28 @@ pub async fn join(State(state): State<AppState>, actor: Actor, Path(id): Path<St
     let g = load(&state, &id).await?;
     let now = ts(state.now());
     let mut tx = state.db.begin().await?;
-    sqlx::query("INSERT OR IGNORE INTO group_members (group_id, member_id) VALUES (?, ?)").bind(&id).bind(&actor.id).execute(&mut *tx).await?;
-    record(&mut tx, &now, NewActivity {
-        actor: Some(&actor), source: "app", entity_type: "group", entity_id: &id, group_id: Some(&id), op: "join",
-        summary: format!("{} joined “{}”", actor.name, g.name), revision: 0, before: None, after: None,
-    }).await?;
+    sqlx::query("INSERT OR IGNORE INTO group_members (group_id, member_id) VALUES (?, ?)")
+        .bind(&id)
+        .bind(&actor.id)
+        .execute(&mut *tx)
+        .await?;
+    record(
+        &mut tx,
+        &now,
+        NewActivity {
+            actor: Some(&actor),
+            source: "app",
+            entity_type: "group",
+            entity_id: &id,
+            group_id: Some(&id),
+            op: "join",
+            summary: format!("{} joined “{}”", actor.name, g.name),
+            revision: 0,
+            before: None,
+            after: None,
+        },
+    )
+    .await?;
     tx.commit().await?;
     Ok(Json(load(&state, &id).await?))
 }
@@ -300,20 +361,40 @@ pub async fn leave(State(state): State<AppState>, actor: Actor, Path(id): Path<S
     let mut tx = state.db.begin().await?;
     sqlx::query("DELETE FROM group_members WHERE group_id = ? AND member_id = ?").bind(&id).bind(&actor.id).execute(&mut *tx).await?;
     // Unassign open items so nothing silently stays on someone who left.
-    sqlx::query("UPDATE tasks SET assignee_id = NULL, version = version + 1 WHERE group_id = ? AND assignee_id = ? AND completed_at IS NULL")
-        .bind(&id)
-        .bind(&actor.id)
-        .execute(&mut *tx)
-        .await?;
-    record(&mut tx, &now, NewActivity {
-        actor: Some(&actor), source: "app", entity_type: "group", entity_id: &id, group_id: Some(&id), op: "leave",
-        summary: format!("{} left “{}”; their open items are unassigned", actor.name, g.name), revision: 0, before: None, after: None,
-    }).await?;
+    sqlx::query(
+        "UPDATE tasks SET assignee_id = NULL, version = version + 1 WHERE group_id = ? AND assignee_id = ? AND completed_at IS NULL",
+    )
+    .bind(&id)
+    .bind(&actor.id)
+    .execute(&mut *tx)
+    .await?;
+    record(
+        &mut tx,
+        &now,
+        NewActivity {
+            actor: Some(&actor),
+            source: "app",
+            entity_type: "group",
+            entity_id: &id,
+            group_id: Some(&id),
+            op: "leave",
+            summary: format!("{} left “{}”; their open items are unassigned", actor.name, g.name),
+            revision: 0,
+            before: None,
+            after: None,
+        },
+    )
+    .await?;
     tx.commit().await?;
     Ok(Json(load(&state, &id).await?))
 }
 
-pub async fn add_milestone(State(state): State<AppState>, actor: Actor, Path(id): Path<String>, Json(input): Json<MilestoneInput>) -> AppResult<Json<Group>> {
+pub async fn add_milestone(
+    State(state): State<AppState>,
+    actor: Actor,
+    Path(id): Path<String>,
+    Json(input): Json<MilestoneInput>,
+) -> AppResult<Json<Group>> {
     ensure_member(&state, &id, &actor).await?;
     let title = validate::title("title", &input.title, 120)?;
     let due = validate::date("dueDate", input.due_date.as_deref())?;
@@ -330,10 +411,23 @@ pub async fn add_milestone(State(state): State<AppState>, actor: Actor, Path(id)
         .bind(&now)
         .execute(&mut *tx)
         .await?;
-    record(&mut tx, &now, NewActivity {
-        actor: Some(&actor), source: "app", entity_type: "milestone", entity_id: &mid, group_id: Some(&id), op: "create",
-        summary: format!("{} added milestone “{title}”", actor.name), revision: 1, before: None, after: Some(json!({"dueDate": due})),
-    }).await?;
+    record(
+        &mut tx,
+        &now,
+        NewActivity {
+            actor: Some(&actor),
+            source: "app",
+            entity_type: "milestone",
+            entity_id: &mid,
+            group_id: Some(&id),
+            op: "create",
+            summary: format!("{} added milestone “{title}”", actor.name),
+            revision: 1,
+            before: None,
+            after: Some(json!({"dueDate": due})),
+        },
+    )
+    .await?;
     tx.commit().await?;
     Ok(Json(load(&state, &id).await?))
 }
@@ -361,24 +455,53 @@ pub async fn update_milestone(
     if n == 0 {
         return Err(AppError::NotFound("milestone"));
     }
-    record(&mut tx, &now, NewActivity {
-        actor: Some(&actor), source: "app", entity_type: "milestone", entity_id: &mid, group_id: Some(&id), op: "update",
-        summary: format!("{} updated milestone “{title}”", actor.name), revision: 0, before: None,
-        after: Some(json!({"dueDate": due, "done": input.done.unwrap_or(false)})),
-    }).await?;
+    record(
+        &mut tx,
+        &now,
+        NewActivity {
+            actor: Some(&actor),
+            source: "app",
+            entity_type: "milestone",
+            entity_id: &mid,
+            group_id: Some(&id),
+            op: "update",
+            summary: format!("{} updated milestone “{title}”", actor.name),
+            revision: 0,
+            before: None,
+            after: Some(json!({"dueDate": due, "done": input.done.unwrap_or(false)})),
+        },
+    )
+    .await?;
     tx.commit().await?;
     Ok(Json(load(&state, &id).await?))
 }
 
-pub async fn delete_milestone(State(state): State<AppState>, actor: Actor, Path((id, mid)): Path<(String, String)>) -> AppResult<Json<Group>> {
+pub async fn delete_milestone(
+    State(state): State<AppState>,
+    actor: Actor,
+    Path((id, mid)): Path<(String, String)>,
+) -> AppResult<Json<Group>> {
     ensure_member(&state, &id, &actor).await?;
     let now = ts(state.now());
     let mut tx = state.db.begin().await?;
     sqlx::query("DELETE FROM milestones WHERE id = ? AND group_id = ?").bind(&mid).bind(&id).execute(&mut *tx).await?;
-    record(&mut tx, &now, NewActivity {
-        actor: Some(&actor), source: "app", entity_type: "milestone", entity_id: &mid, group_id: Some(&id), op: "delete",
-        summary: format!("{} removed a milestone", actor.name), revision: 0, before: None, after: None,
-    }).await?;
+    record(
+        &mut tx,
+        &now,
+        NewActivity {
+            actor: Some(&actor),
+            source: "app",
+            entity_type: "milestone",
+            entity_id: &mid,
+            group_id: Some(&id),
+            op: "delete",
+            summary: format!("{} removed a milestone", actor.name),
+            revision: 0,
+            before: None,
+            after: None,
+        },
+    )
+    .await?;
     tx.commit().await?;
     Ok(Json(load(&state, &id).await?))
 }

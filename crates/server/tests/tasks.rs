@@ -18,7 +18,9 @@ async fn task_crud_conflicts_and_history() {
     let g = app.group(&a, "Home", "household", &[&a, &b]).await;
     let gid = g["id"].as_str().unwrap();
     let t = app
-        .ok(Req::new("POST", "/api/tasks").actor(&a).json(json!({"title": "  Water plants ", "groupId": gid, "category": "home", "subtasks": ["Kitchen", "Balcony"], "tags": ["Green"]})))
+        .ok(Req::new("POST", "/api/tasks").actor(&a).json(
+            json!({"title": "  Water plants ", "groupId": gid, "category": "home", "subtasks": ["Kitchen", "Balcony"], "tags": ["Green"]}),
+        ))
         .await;
     assert_eq!(t["title"], "Water plants");
     assert_eq!(t["tags"], json!(["green"]));
@@ -31,20 +33,26 @@ async fn task_crud_conflicts_and_history() {
     assert_eq!(res.body["field"], "dueDate");
 
     // Reassign to Sam: activity + notification for Sam.
-    let t2 = app.ok(Req::new("PATCH", format!("/api/tasks/{id}")).actor(&a).json(json!({"expectedVersion": 1, "changes": {"assigneeId": b}}))).await;
+    let t2 = app
+        .ok(Req::new("PATCH", format!("/api/tasks/{id}")).actor(&a).json(json!({"expectedVersion": 1, "changes": {"assigneeId": b}})))
+        .await;
     assert_eq!(t2["assigneeId"], b.as_str());
     assert_eq!(t2["version"], 2);
     let notes = app.ok(Req::new("GET", "/api/notifications").actor(&b)).await;
     assert!(notes.as_array().unwrap().iter().any(|n| n["kind"] == "assignment"));
 
     // A stale edit conflicts and returns the current version.
-    let res = app.send(Req::new("PATCH", format!("/api/tasks/{id}")).actor(&b).json(json!({"expectedVersion": 1, "changes": {"title": "Mine"}}))).await;
+    let res = app
+        .send(Req::new("PATCH", format!("/api/tasks/{id}")).actor(&b).json(json!({"expectedVersion": 1, "changes": {"title": "Mine"}})))
+        .await;
     assert_eq!(res.status, StatusCode::CONFLICT);
     assert_eq!(res.body["current"]["version"], 2);
 
     // Assignee must be in the group.
     let c = app.member("Outsider").await;
-    let res = app.send(Req::new("PATCH", format!("/api/tasks/{id}")).actor(&a).json(json!({"expectedVersion": 2, "changes": {"assigneeId": c}}))).await;
+    let res = app
+        .send(Req::new("PATCH", format!("/api/tasks/{id}")).actor(&a).json(json!({"expectedVersion": 2, "changes": {"assigneeId": c}})))
+        .await;
     assert_eq!(res.status, StatusCode::BAD_REQUEST);
 
     let h = app.ok(Req::new("GET", format!("/api/tasks/{id}/history")).actor(&a)).await;
@@ -70,7 +78,9 @@ async fn recurring_chore_rotates_and_keeps_history() {
     let gid = g["id"].as_str().unwrap();
     let due = today(&app).format("%Y-%m-%d").to_string();
     let t = app
-        .ok(Req::new("POST", "/api/templates/dishes/use").actor(&a).json(json!({"groupId": gid, "rotation": [a, b], "dueDate": due, "timezone": "UTC"})))
+        .ok(Req::new("POST", "/api/templates/dishes/use")
+            .actor(&a)
+            .json(json!({"groupId": gid, "rotation": [a, b], "dueDate": due, "timezone": "UTC"})))
         .await;
     assert_eq!(t["recurrence"], "FREQ=DAILY");
     assert_eq!(t["assigneeId"], a.as_str());
@@ -80,7 +90,8 @@ async fn recurring_chore_rotates_and_keeps_history() {
     // Tick one checklist item, then complete.
     let mut subs = t["subtasks"].clone();
     subs[0]["done"] = json!(true);
-    app.ok(Req::new("PATCH", format!("/api/tasks/{id}")).actor(&a).json(json!({"expectedVersion": 1, "changes": {"subtasks": subs}}))).await;
+    app.ok(Req::new("PATCH", format!("/api/tasks/{id}")).actor(&a).json(json!({"expectedVersion": 1, "changes": {"subtasks": subs}})))
+        .await;
     let r = app.ok(Req::new("POST", format!("/api/tasks/{id}/complete")).actor(&a)).await;
     let tomorrow = (today(&app) + Duration::days(1)).format("%Y-%m-%d").to_string();
     assert_eq!(r["nextDueDate"], tomorrow.as_str());
@@ -106,7 +117,9 @@ async fn overdue_fixed_chore_skips_missed_occurrences_and_after_completion_count
     let a = app.member("Alex").await;
     let long_ago = (today(&app) - Duration::days(20)).format("%Y-%m-%d").to_string();
     let t = app
-        .ok(Req::new("POST", "/api/tasks").actor(&a).json(json!({"title": "Water plants", "dueDate": long_ago, "recurrence": "FREQ=WEEKLY", "timezone": "UTC"})))
+        .ok(Req::new("POST", "/api/tasks")
+            .actor(&a)
+            .json(json!({"title": "Water plants", "dueDate": long_ago, "recurrence": "FREQ=WEEKLY", "timezone": "UTC"})))
         .await;
     let r = app.ok(Req::new("POST", format!("/api/tasks/{}/complete", t["id"].as_str().unwrap())).actor(&a)).await;
     let next = chrono::NaiveDate::parse_from_str(r["nextDueDate"].as_str().unwrap(), "%Y-%m-%d").unwrap();
@@ -133,20 +146,31 @@ async fn kanban_transitions() {
     let t = app.ok(Req::new("POST", "/api/tasks").actor(&a).json(json!({"title": "Buy soil", "groupId": gid}))).await;
     assert_eq!(t["columnKey"], "backlog");
     let id = t["id"].as_str().unwrap();
-    let t = app.ok(Req::new("POST", format!("/api/tasks/{id}/move")).actor(&a).json(json!({"expectedVersion": 1, "columnKey": "in_progress"}))).await;
+    let t = app
+        .ok(Req::new("POST", format!("/api/tasks/{id}/move")).actor(&a).json(json!({"expectedVersion": 1, "columnKey": "in_progress"})))
+        .await;
     assert_eq!(t["columnKey"], "in_progress");
     assert_eq!(t["completedAt"], serde_json::Value::Null);
-    let res = app.send(Req::new("POST", format!("/api/tasks/{id}/move")).actor(&a).json(json!({"expectedVersion": 2, "columnKey": "nowhere"}))).await;
+    let res = app
+        .send(Req::new("POST", format!("/api/tasks/{id}/move")).actor(&a).json(json!({"expectedVersion": 2, "columnKey": "nowhere"})))
+        .await;
     assert_eq!(res.status, StatusCode::BAD_REQUEST);
-    let res = app.send(Req::new("POST", format!("/api/tasks/{id}/move")).actor(&a).json(json!({"expectedVersion": 1, "columnKey": "done"}))).await;
+    let res = app
+        .send(Req::new("POST", format!("/api/tasks/{id}/move")).actor(&a).json(json!({"expectedVersion": 1, "columnKey": "done"})))
+        .await;
     assert_eq!(res.status, StatusCode::CONFLICT);
-    let t = app.ok(Req::new("POST", format!("/api/tasks/{id}/move")).actor(&a).json(json!({"expectedVersion": 2, "columnKey": "done"}))).await;
+    let t =
+        app.ok(Req::new("POST", format!("/api/tasks/{id}/move")).actor(&a).json(json!({"expectedVersion": 2, "columnKey": "done"}))).await;
     assert!(t["completedAt"].is_string(), "done column completes the task");
-    let t = app.ok(Req::new("POST", format!("/api/tasks/{id}/move")).actor(&a).json(json!({"expectedVersion": 3, "columnKey": "blocked"}))).await;
+    let t = app
+        .ok(Req::new("POST", format!("/api/tasks/{id}/move")).actor(&a).json(json!({"expectedVersion": 3, "columnKey": "blocked"})))
+        .await;
     assert_eq!(t["completedAt"], serde_json::Value::Null, "leaving done reopens");
     // Custom columns: rename and remove one; tasks in removed columns move to the first column.
     let g2 = app
-        .ok(Req::new("PATCH", format!("/api/groups/{gid}")).actor(&a).json(json!({"columns": [{"key": "backlog", "name": "Ideas"}, {"name": "Doing"}, {"key": "done", "name": "Done"}]})))
+        .ok(Req::new("PATCH", format!("/api/groups/{gid}"))
+            .actor(&a)
+            .json(json!({"columns": [{"key": "backlog", "name": "Ideas"}, {"name": "Doing"}, {"key": "done", "name": "Done"}]})))
         .await;
     assert_eq!(g2["columns"][1]["key"], "doing");
     let t = app.ok(Req::new("GET", format!("/api/tasks/{id}")).actor(&a)).await;
@@ -174,7 +198,10 @@ async fn group_scoping_and_personal_privacy() {
         assert_eq!(app.send(Req::new("GET", format!("/api/tasks/{id}")).actor(&b)).await.status, StatusCode::FORBIDDEN);
         assert_eq!(app.send(Req::new("POST", format!("/api/tasks/{id}/complete")).actor(&b)).await.status, StatusCode::FORBIDDEN);
     }
-    assert_eq!(app.send(Req::new("POST", "/api/tasks").actor(&b).json(json!({"title": "x", "groupId": gid}))).await.status, StatusCode::FORBIDDEN);
+    assert_eq!(
+        app.send(Req::new("POST", "/api/tasks").actor(&b).json(json!({"title": "x", "groupId": gid}))).await.status,
+        StatusCode::FORBIDDEN
+    );
     // Personal tasks can't be assigned to others.
     let res = app.send(Req::new("POST", "/api/tasks").actor(&a).json(json!({"title": "x", "assigneeId": b}))).await;
     assert_eq!(res.status, StatusCode::BAD_REQUEST);
@@ -205,7 +232,10 @@ async fn nudges_are_opt_in_and_rate_limited() {
     prefs["quietStart"] = json!(null);
     prefs["quietEnd"] = json!(null);
     // Only Sam can change Sam's preferences.
-    assert_eq!(app.send(Req::new("PATCH", format!("/api/members/{b}")).actor(&a).json(json!({"prefs": prefs}))).await.status, StatusCode::FORBIDDEN);
+    assert_eq!(
+        app.send(Req::new("PATCH", format!("/api/members/{b}")).actor(&a).json(json!({"prefs": prefs}))).await.status,
+        StatusCode::FORBIDDEN
+    );
     app.ok(Req::new("PATCH", format!("/api/members/{b}")).actor(&b).json(json!({"prefs": prefs}))).await;
     let t = app.ok(Req::new("POST", "/api/tasks").actor(&a).json(json!({"title": "Laundry"}))).await;
     let tid = t["id"].as_str().unwrap();
@@ -224,7 +254,9 @@ async fn timer_survives_sleep_and_pomodoro_waits() {
     let app = TestApp::new().await;
     let a = app.member("Alex").await;
     let v = app
-        .ok(Req::new("POST", "/api/timer").actor(&a).json(json!({"command": {"action": "start", "kind": "focus", "minutes": 25, "label": "Deep work", "taskId": null, "config": null}})))
+        .ok(Req::new("POST", "/api/timer").actor(&a).json(
+            json!({"command": {"action": "start", "kind": "focus", "minutes": 25, "label": "Deep work", "taskId": null, "config": null}}),
+        ))
         .await;
     assert_eq!(v["state"]["status"], "running");
     let near = |v: &serde_json::Value, ms: i64| (v["remainingMs"].as_i64().unwrap() - ms).abs() < 2_000;
@@ -240,9 +272,15 @@ async fn timer_survives_sleep_and_pomodoro_waits() {
     let v = app.ok(Req::new("GET", "/api/timer").actor(&a)).await;
     assert_eq!(v["phaseJustEnded"], false, "ending is reported once");
 
-    let v = app.ok(Req::new("POST", "/api/timer").actor(&a).json(json!({"command": {"action": "start", "kind": "pomodoro", "minutes": null, "label": null, "taskId": null, "config": null}}))).await;
+    let v = app
+        .ok(Req::new("POST", "/api/timer").actor(&a).json(
+            json!({"command": {"action": "start", "kind": "pomodoro", "minutes": null, "label": null, "taskId": null, "config": null}}),
+        ))
+        .await;
     let version = v["version"].as_u64().unwrap();
-    let res = app.send(Req::new("POST", "/api/timer").actor(&a).json(json!({"command": {"action": "pause"}, "expectedVersion": version - 1}))).await;
+    let res = app
+        .send(Req::new("POST", "/api/timer").actor(&a).json(json!({"command": {"action": "pause"}, "expectedVersion": version - 1})))
+        .await;
     assert_eq!(res.status, StatusCode::CONFLICT, "another device changed it");
     app.state.clock.advance(Duration::hours(2));
     let v = app.ok(Req::new("GET", "/api/timer").actor(&a)).await;
@@ -257,7 +295,9 @@ async fn timer_survives_sleep_and_pomodoro_waits() {
 async fn alarms_countdowns_and_usage() {
     let app = TestApp::new().await;
     let a = app.member("Alex").await;
-    let al = app.ok(Req::new("POST", "/api/alarms").actor(&a).json(json!({"label": "Meds", "time": "08:00", "weekdays": 0, "timezone": "UTC"}))).await;
+    let al = app
+        .ok(Req::new("POST", "/api/alarms").actor(&a).json(json!({"label": "Meds", "time": "08:00", "weekdays": 0, "timezone": "UTC"})))
+        .await;
     assert!(al["nextFireAt"].is_string());
     let id = al["id"].as_str().unwrap();
     app.state.clock.advance(Duration::days(2));
@@ -266,9 +306,15 @@ async fn alarms_countdowns_and_usage() {
     assert!(next > app.state.now(), "a missed alarm fires once, then moves on");
     let sn = app.ok(Req::new("POST", format!("/api/alarms/{id}/snooze")).actor(&a).json(json!({"minutes": 10}))).await;
     assert_eq!(sn["nextFireAt"], sn["snoozedUntil"]);
-    assert_eq!(app.send(Req::new("POST", "/api/alarms").actor(&a).json(json!({"label": "x", "time": "8am"}))).await.status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        app.send(Req::new("POST", "/api/alarms").actor(&a).json(json!({"label": "x", "time": "8am"}))).await.status,
+        StatusCode::BAD_REQUEST
+    );
 
-    app.ok(Req::new("POST", "/api/countdowns").actor(&a).json(json!({"title": "Exam", "date": "2030-06-01", "timezone": "Europe/Stockholm"}))).await;
+    app.ok(Req::new("POST", "/api/countdowns")
+        .actor(&a)
+        .json(json!({"title": "Exam", "date": "2030-06-01", "timezone": "Europe/Stockholm"})))
+        .await;
     let cds = app.ok(Req::new("GET", "/api/countdowns").actor(&a)).await;
     assert_eq!(cds[0]["targetAt"], "2030-05-31T22:00:00Z");
 
@@ -283,7 +329,10 @@ async fn alarms_countdowns_and_usage() {
     assert_eq!(u["sevenDay"]["reached"], json!([50]));
     let n = app.ok(Req::new("GET", "/api/notifications").actor(&a)).await;
     assert!(n.as_array().unwrap().iter().any(|x| x["kind"] == "usage"));
-    assert_eq!(app.send(Req::new("PUT", "/api/usage").actor(&a).json(json!({"fiveHourPercent": 150}))).await.status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        app.send(Req::new("PUT", "/api/usage").actor(&a).json(json!({"fiveHourPercent": 150}))).await.status,
+        StatusCode::BAD_REQUEST
+    );
     app.state.clock.advance(Duration::hours(3));
     let u = app.ok(Req::new("GET", "/api/usage").actor(&a)).await;
     assert_eq!(u["fiveHour"]["state"], "reset_passed");

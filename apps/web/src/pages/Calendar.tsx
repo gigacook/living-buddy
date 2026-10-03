@@ -164,7 +164,7 @@ export default function Calendar() {
           <button type="button" className="btn" aria-expanded={showFilters} onClick={() => setShowFilters(!showFilters)}>
             <Filter size={18} aria-hidden /> Filter
           </button>
-          <details className="disclosure" style={{ position: "relative" }}>
+          <details className="menu" style={{ position: "relative" }}>
             <summary className="btn">
               <Download size={18} aria-hidden /> Export
             </summary>
@@ -216,7 +216,7 @@ export default function Calendar() {
                 const outside = parseIsoDate(day).getMonth() !== parseIsoDate(anchor).getMonth();
                 return (
                   <div key={day} role="group" className={`cal-cell${outside ? " outside" : ""}${day === today ? " today" : ""}`} aria-label={`${longDate(day)}, ${items.length} item${items.length === 1 ? "" : "s"}`}>
-                    <button type="button" className="cal-day btn-ghost" style={{ border: 0, cursor: "pointer", font: "inherit", background: "transparent", color: "inherit" }} onClick={() => setNewEvent(day)} aria-label={`Add event on ${longDate(day)}`}>
+                    <button type="button" className="cal-day" onClick={() => setNewEvent(day)} aria-label={`Add event on ${longDate(day)}`}>
                       {parseIsoDate(day).getDate()}
                     </button>
                     {items.slice(0, 3).map((o) => (

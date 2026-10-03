@@ -90,15 +90,11 @@ pub fn secret_env(name: &str) -> Result<Option<String>> {
 }
 
 fn parse_list(v: Option<String>) -> Vec<String> {
-    v.map(|s| s.split(',').map(|x| x.trim().to_string()).filter(|x| !x.is_empty()).collect())
-        .unwrap_or_default()
+    v.map(|s| s.split(',').map(|x| x.trim().to_string()).filter(|x| !x.is_empty()).collect()).unwrap_or_default()
 }
 
 fn parse_nets(v: Option<String>, name: &str) -> Result<Vec<IpNet>> {
-    parse_list(v)
-        .into_iter()
-        .map(|s| s.parse::<IpNet>().with_context(|| format!("{name}: invalid network {s}")))
-        .collect()
+    parse_list(v).into_iter().map(|s| s.parse::<IpNet>().with_context(|| format!("{name}: invalid network {s}"))).collect()
 }
 
 impl Config {
@@ -109,10 +105,8 @@ impl Config {
             "remote" => ServerMode::Remote,
             other => bail!("TENDLY_MODE must be local, lan or remote (got {other})"),
         };
-        let bind: SocketAddr = env("TENDLY_BIND")
-            .unwrap_or_else(|| "127.0.0.1:7878".into())
-            .parse()
-            .context("TENDLY_BIND must look like 127.0.0.1:7878")?;
+        let bind: SocketAddr =
+            env("TENDLY_BIND").unwrap_or_else(|| "127.0.0.1:7878".into()).parse().context("TENDLY_BIND must look like 127.0.0.1:7878")?;
         let data_dir = PathBuf::from(env("TENDLY_DATA_DIR").unwrap_or_else(|| "./data".into()));
         let database_path = env("TENDLY_DATABASE_PATH").map(PathBuf::from).unwrap_or_else(|| data_dir.join("tendly.db"));
         let cfg = Config {
@@ -222,7 +216,9 @@ impl Config {
 
 pub fn is_private_net(n: &IpNet) -> bool {
     match n.network() {
-        IpAddr::V4(v4) => v4.is_private() || v4.is_loopback() || v4.is_link_local() || (v4.octets()[0] == 100 && (v4.octets()[1] & 0xc0) == 64),
+        IpAddr::V4(v4) => {
+            v4.is_private() || v4.is_loopback() || v4.is_link_local() || (v4.octets()[0] == 100 && (v4.octets()[1] & 0xc0) == 64)
+        }
         IpAddr::V6(v6) => v6.is_loopback() || (v6.segments()[0] & 0xfe00) == 0xfc00 || (v6.segments()[0] & 0xffc0) == 0xfe80,
     }
 }

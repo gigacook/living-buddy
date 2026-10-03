@@ -44,18 +44,12 @@ pub fn timezone(raw: Option<&str>, default: &str) -> AppResult<String> {
 pub fn recurrence(raw: Option<&str>) -> AppResult<Option<String>> {
     match raw.map(str::trim).filter(|s| !s.is_empty()) {
         None => Ok(None),
-        Some(s) => RRule::parse(s)
-            .map(|r| Some(r.to_string()))
-            .map_err(|e| AppError::field("recurrence", format!("Repeat rule: {e}."))),
+        Some(s) => RRule::parse(s).map(|r| Some(r.to_string())).map_err(|e| AppError::field("recurrence", format!("Repeat rule: {e}."))),
     }
 }
 
 pub fn tags(raw: &[String]) -> AppResult<Vec<String>> {
-    let mut out: Vec<String> = raw
-        .iter()
-        .map(|t| clean_text(t, 32, false).to_lowercase())
-        .filter(|t| !t.is_empty())
-        .collect();
+    let mut out: Vec<String> = raw.iter().map(|t| clean_text(t, 32, false).to_lowercase()).filter(|t| !t.is_empty()).collect();
     out.sort();
     out.dedup();
     if out.len() > 20 {

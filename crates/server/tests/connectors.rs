@@ -16,7 +16,11 @@ async fn fixture_connector_ingests_once_and_requires_confirmation() {
     let app = TestApp::new().await;
     let a = app.member("Alex").await;
     let b = app.member("Sam").await;
-    let c = app.ok(Req::new("POST", "/api/admin/connectors").actor(&a).json(json!({"provider": "fixture", "displayName": "Sample inbox", "settings": {"set": "sample"}}))).await;
+    let c = app
+        .ok(Req::new("POST", "/api/admin/connectors")
+            .actor(&a)
+            .json(json!({"provider": "fixture", "displayName": "Sample inbox", "settings": {"set": "sample"}})))
+        .await;
     let id = c["id"].as_str().unwrap();
     assert_eq!(c["implementation"], "implemented");
     let res = app.send(Req::new("POST", format!("/api/admin/connectors/{id}/run"))).await;
@@ -43,30 +47,44 @@ async fn fixture_connector_ingests_once_and_requires_confirmation() {
     assert!(inj["draft"]["flags"].as_array().unwrap().iter().any(|f| f == "possible_instructions_in_content"));
     let tasks = app.ok(Req::new("GET", "/api/tasks?status=all").actor(&a)).await;
     assert!(tasks.as_array().unwrap().is_empty(), "nothing is created without confirmation");
-    let excerpt: Option<String> = sqlx::query_scalar("SELECT excerpt FROM ingested_items WHERE subject LIKE 'Invoice%'").fetch_one(&app.state.db).await.unwrap();
+    let excerpt: Option<String> =
+        sqlx::query_scalar("SELECT excerpt FROM ingested_items WHERE subject LIKE 'Invoice%'").fetch_one(&app.state.db).await.unwrap();
     assert!(!excerpt.unwrap().contains("FAKE-TOKEN"), "URL query strings are stripped before storage");
 
     // Accept the dentist suggestion as an event and the invoice as a task.
     let dentist = list.iter().find(|s| s["subject"].as_str().unwrap().contains("dental")).unwrap();
     assert_eq!(dentist["draft"]["date"], "2026-10-14");
     let acc = app
-        .ok(Req::new("POST", format!("/api/inbox/suggestions/{}/accept", dentist["id"].as_str().unwrap())).actor(&a).json(json!({"createAs": "event", "title": "Dentist", "date": "2026-10-14", "time": "14:30", "timezone": "UTC"})))
+        .ok(Req::new("POST", format!("/api/inbox/suggestions/{}/accept", dentist["id"].as_str().unwrap()))
+            .actor(&a)
+            .json(json!({"createAs": "event", "title": "Dentist", "date": "2026-10-14", "time": "14:30", "timezone": "UTC"})))
         .await;
     assert_eq!(acc["status"], "accepted");
     assert_eq!(acc["resultType"], "event");
     let invoice = list.iter().find(|s| s["subject"].as_str().unwrap().contains("Invoice")).unwrap();
     let acc = app
-        .ok(Req::new("POST", format!("/api/inbox/suggestions/{}/accept", invoice["id"].as_str().unwrap())).actor(&a).json(json!({"createAs": "task", "title": "Pay electricity", "date": "2026-10-25"})))
+        .ok(Req::new("POST", format!("/api/inbox/suggestions/{}/accept", invoice["id"].as_str().unwrap()))
+            .actor(&a)
+            .json(json!({"createAs": "task", "title": "Pay electricity", "date": "2026-10-25"})))
         .await;
     let t = app.ok(Req::new("GET", format!("/api/tasks/{}", acc["resultId"].as_str().unwrap())).actor(&a)).await;
     assert_eq!(t["tags"], json!(["inbox"]));
-    let res = app.send(Req::new("POST", format!("/api/inbox/suggestions/{}/accept", invoice["id"].as_str().unwrap())).actor(&a).json(json!({"createAs": "task", "title": "again"}))).await;
+    let res = app
+        .send(
+            Req::new("POST", format!("/api/inbox/suggestions/{}/accept", invoice["id"].as_str().unwrap()))
+                .actor(&a)
+                .json(json!({"createAs": "task", "title": "again"})),
+        )
+        .await;
     assert_eq!(res.status, StatusCode::BAD_REQUEST, "accepting twice is refused");
     let d = app.ok(Req::new("POST", format!("/api/inbox/suggestions/{}/dismiss", inj["id"].as_str().unwrap())).actor(&a)).await;
     assert_eq!(d["status"], "dismissed");
     // Someone else can't act on Alex's suggestions.
     let school = list.iter().find(|s| s["subject"].as_str().unwrap().contains("permission")).unwrap();
-    assert_eq!(app.send(Req::new("POST", format!("/api/inbox/suggestions/{}/dismiss", school["id"].as_str().unwrap())).actor(&b)).await.status, StatusCode::NOT_FOUND);
+    assert_eq!(
+        app.send(Req::new("POST", format!("/api/inbox/suggestions/{}/dismiss", school["id"].as_str().unwrap())).actor(&b)).await.status,
+        StatusCode::NOT_FOUND
+    );
 
     // Retention removes stored excerpts after the period.
     app.state.clock.advance(Duration::days(30));
@@ -79,7 +97,9 @@ async fn paste_intake_uses_local_rules_without_ai() {
     let app = TestApp::new().await;
     let a = app.member("Alex").await;
     let r = app
-        .ok(Req::new("POST", "/api/inbox/intake").actor(&a).json(json!({"subject": "Parent-teacher meeting", "text": "The meeting is on 2026-11-05 at 17:00 in room 4.", "useAi": true})))
+        .ok(Req::new("POST", "/api/inbox/intake")
+            .actor(&a)
+            .json(json!({"subject": "Parent-teacher meeting", "text": "The meeting is on 2026-11-05 at 17:00 in room 4.", "useAi": true})))
         .await;
     assert_eq!(r["extractor"], "rules");
     assert!(r["notice"].as_str().unwrap().contains("not enabled"));
@@ -94,13 +114,18 @@ async fn job_queue_retries_with_backoff_and_is_idempotent() {
     let a = app.member("Alex").await;
     let s = &app.state;
     // A connector pointing at a missing fixture set fails permanently: no retry storm.
-    let c = app.ok(Req::new("POST", "/api/admin/connectors").actor(&a).json(json!({"provider": "fixture", "displayName": "Broken", "settings": {"set": "does-not-exist"}}))).await;
+    let c = app
+        .ok(Req::new("POST", "/api/admin/connectors")
+            .actor(&a)
+            .json(json!({"provider": "fixture", "displayName": "Broken", "settings": {"set": "does-not-exist"}})))
+        .await;
     app.ok(Req::new("PATCH", format!("/api/admin/connectors/{}", c["id"].as_str().unwrap())).json(json!({"enabled": true}))).await;
     let n = tendly_server::worker::schedule_due(s).await.unwrap();
     assert!(n >= 2, "sync + retention scheduled");
     assert_eq!(tendly_server::worker::schedule_due(s).await.unwrap(), 0, "same window: no duplicate jobs");
     tendly_server::worker::run_once(s, 10).await.unwrap();
-    let (status, attempts): (String, i64) = sqlx::query_as("SELECT status, attempts FROM jobs WHERE kind = 'connector_sync'").fetch_one(&s.db).await.unwrap();
+    let (status, attempts): (String, i64) =
+        sqlx::query_as("SELECT status, attempts FROM jobs WHERE kind = 'connector_sync'").fetch_one(&s.db).await.unwrap();
     assert_eq!((status.as_str(), attempts), ("dead", 1));
     let conn: (String, i64) = sqlx::query_as("SELECT status, consecutive_failures FROM connectors").fetch_one(&s.db).await.unwrap();
     assert_eq!(conn, ("error".to_string(), 1));
@@ -115,7 +140,10 @@ async fn job_queue_retries_with_backoff_and_is_idempotent() {
         .await
         .unwrap();
     tendly_server::worker::enqueue(s, "calendar_refresh", json!({"sourceId": "src"}), Some("cal-test"), s.now()).await.unwrap();
-    assert!(!tendly_server::worker::enqueue(s, "calendar_refresh", json!({"sourceId": "src"}), Some("cal-test"), s.now()).await.unwrap(), "idempotency key");
+    assert!(
+        !tendly_server::worker::enqueue(s, "calendar_refresh", json!({"sourceId": "src"}), Some("cal-test"), s.now()).await.unwrap(),
+        "idempotency key"
+    );
     tendly_server::worker::run_once(s, 10).await.unwrap();
     let (status, attempts, run_after): (String, i64, String) =
         sqlx::query_as("SELECT status, attempts, run_after FROM jobs WHERE idempotency_key = 'cal-test'").fetch_one(&s.db).await.unwrap();
@@ -126,7 +154,8 @@ async fn job_queue_retries_with_backoff_and_is_idempotent() {
         s.clock.advance(Duration::hours(7));
         tendly_server::worker::run_once(s, 10).await.unwrap();
     }
-    let (status, attempts): (String, i64) = sqlx::query_as("SELECT status, attempts FROM jobs WHERE idempotency_key = 'cal-test'").fetch_one(&s.db).await.unwrap();
+    let (status, attempts): (String, i64) =
+        sqlx::query_as("SELECT status, attempts FROM jobs WHERE idempotency_key = 'cal-test'").fetch_one(&s.db).await.unwrap();
     assert_eq!((status.as_str(), attempts), ("dead", 5));
     assert!(tendly_server::worker::backoff(1, None) < tendly_server::worker::backoff(4, None));
     assert_eq!(tendly_server::worker::backoff(3, Some(120)), Duration::seconds(120));
@@ -215,7 +244,11 @@ async fn gmail_adapter_refreshes_tokens_uses_history_cursor_and_detects_revocati
     tendly_server::connectors::save_credentials(
         &app.state,
         &id,
-        &tendly_server::connectors::Credentials { access_token: Some("expired".into()), refresh_token: Some("refresh-1".into()), expires_at: Some(app.state.now() - Duration::minutes(5)) },
+        &tendly_server::connectors::Credentials {
+            access_token: Some("expired".into()),
+            refresh_token: Some("refresh-1".into()),
+            expires_at: Some(app.state.now() - Duration::minutes(5)),
+        },
     )
     .await
     .unwrap();
@@ -243,7 +276,11 @@ async fn gmail_adapter_refreshes_tokens_uses_history_cursor_and_detects_revocati
     tendly_server::connectors::save_credentials(
         &app.state,
         &id,
-        &tendly_server::connectors::Credentials { access_token: Some("x".into()), refresh_token: Some("revoked".into()), expires_at: Some(app.state.now() - Duration::minutes(1)) },
+        &tendly_server::connectors::Credentials {
+            access_token: Some("x".into()),
+            refresh_token: Some("revoked".into()),
+            expires_at: Some(app.state.now() - Duration::minutes(1)),
+        },
     )
     .await
     .unwrap();
@@ -291,9 +328,16 @@ async fn slack_adapter_reads_new_messages_and_handles_rate_limits() {
     let state = tendly_server::init_state(cfg).await.unwrap();
     let app = TestApp::from_state(state, dir);
     let a = app.member("Alex").await;
-    let c = app.ok(Req::new("POST", "/api/admin/connectors").actor(&a).json(json!({"provider": "slack", "displayName": "Team Slack", "settings": {"channels": ["C123"]}}))).await;
+    let c = app
+        .ok(Req::new("POST", "/api/admin/connectors")
+            .actor(&a)
+            .json(json!({"provider": "slack", "displayName": "Team Slack", "settings": {"channels": ["C123"]}})))
+        .await;
     let id = c["id"].as_str().unwrap();
-    assert_eq!(app.send(Req::new("POST", format!("/api/admin/connectors/{id}/credentials")).json(json!({"token": "not-a-token"}))).await.status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        app.send(Req::new("POST", format!("/api/admin/connectors/{id}/credentials")).json(json!({"token": "not-a-token"}))).await.status,
+        StatusCode::BAD_REQUEST
+    );
     app.ok(Req::new("POST", format!("/api/admin/connectors/{id}/credentials")).json(json!({"token": "xoxb-synthetic-test-token"}))).await;
     app.ok(Req::new("PATCH", format!("/api/admin/connectors/{id}")).json(json!({"enabled": true}))).await;
     let c = app.ok(Req::new("POST", format!("/api/admin/connectors/{id}/run"))).await;
