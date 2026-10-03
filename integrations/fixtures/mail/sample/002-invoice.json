@@ -1,0 +1,6 @@
+{
+  "id": "fixture-002",
+  "subject": "Invoice 2026-118 from Example Utilities",
+  "body": "Your electricity invoice is ready. Payment due 2026-10-25. Amount: 41.20 (synthetic).\nYou can view the invoice at https://utilities.example/invoice?token=FAKE-TOKEN-123",
+  "receivedAt": "2026-10-03T08:00:00Z"
+}

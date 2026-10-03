@@ -1,0 +1,9 @@
+{
+  "name": "@tendly/contracts",
+  "version": "0.1.0",
+  "private": true,
+  "description": "TypeScript API contracts generated from the Rust core (ts-rs).",
+  "type": "module",
+  "main": "src/index.ts",
+  "types": "src/index.ts"
+}

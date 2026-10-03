@@ -1,0 +1,50 @@
+[package]
+name = "tendly-server"
+description = "Self-hostable Tendly server, worker and CLI."
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+repository.workspace = true
+
+[lib]
+name = "tendly_server"
+path = "src/lib.rs"
+
+[[bin]]
+name = "tendly"
+path = "src/main.rs"
+
+[dependencies]
+tendly-core = { path = "../core" }
+anyhow.workspace = true
+thiserror.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+chrono.workspace = true
+chrono-tz.workspace = true
+uuid.workspace = true
+regex.workspace = true
+tokio.workspace = true
+axum = { version = "0.8", features = ["macros", "multipart"] }
+tower = { version = "0.5", features = ["util"] }
+tower-http = { version = "0.6", features = ["fs", "trace", "set-header", "limit"] }
+sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio", "sqlite", "migrate", "macros", "derive"] }
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json", "stream"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
+clap = { version = "4", features = ["derive", "env"] }
+rand = "0.8"
+sha2 = "0.10"
+hmac = "0.12"
+hex = "0.4"
+base64 = "0.22"
+aes-gcm = "0.10"
+ipnet = "2"
+url = "2"
+futures-util = "0.3"
+http-body-util = "0.1"
+bytes = "1"
+mime_guess = "2"
+
+[dev-dependencies]
+tempfile = "3"

@@ -1,0 +1,23 @@
+{
+  "name": "tendly",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Tendly — calm life admin, focus timers and shared routines.",
+  "workspaces": [
+    "packages/contracts",
+    "apps/web",
+    "apps/native"
+  ],
+  "scripts": {
+    "dev": "npm run dev -w @tendly/web",
+    "build": "npm run build -w @tendly/web",
+    "lint": "npm run lint -w @tendly/web",
+    "typecheck": "npm run typecheck -w @tendly/web",
+    "test": "npm run test -w @tendly/web",
+    "e2e": "npm run e2e -w @tendly/web",
+    "contracts": "cargo test -p tendly-core --quiet export_bindings && node scripts/gen-contracts-index.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

@@ -1,0 +1,6 @@
+{
+  "id": "fixture-001",
+  "subject": "Appointment reminder: dental check-up",
+  "body": "Duplicate delivery of the same message id; must not create a second suggestion.",
+  "receivedAt": "2026-10-03T07:12:00Z"
+}

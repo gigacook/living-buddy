@@ -1,0 +1,6 @@
+{
+  "id": "fixture-001",
+  "subject": "Appointment reminder: dental check-up",
+  "body": "Hello,\n\nThis is a reminder that your dental check-up is booked for 2026-10-14 at 14:30 at Example Street Dental Clinic.\nPlease reply if you need to reschedule.\n\n-- \nExample Street Dental (synthetic fixture)",
+  "receivedAt": "2026-10-03T07:12:00Z"
+}
