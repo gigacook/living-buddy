@@ -8,11 +8,11 @@ Treat the original product requirements as the target, the workspace as evidence
 
 Start by inspecting the available artifacts and validating the handoff. Then execute. Do not stop after producing a plan, completing the first listed task, or presenting another general progress summary.
 
-Owner preferences stated explicitly during the first session (they override defaults):
+Owner preferences (they override defaults):
 
 - Work autonomously; do not ask clarification questions for routine choices.
-- Commit finished, verified work and push it to **`main`** of `github.com/gigacook/living-buddy` (fast-forward only; never force-push, never rewrite history). The owner was annoyed that the first session worked on a side branch.
-- Running, installing and testing must be **one clean command**, not several lines of npm/cargo. The first session added `./tendly` for this; keep it the front door and extend it rather than adding multi-step instructions.
+- Commit finished, verified work and push it directly to **`main`** of `github.com/gigacook/tendly` (fast-forward only; never force-push, never rewrite history). Do not work on side branches.
+- Running, installing and testing must be **one clean command**, not several lines of npm/cargo. `./tendly` is that front door; extend it rather than adding multi-step instructions.
 - The owner is terse; keep status messages short and concrete.
 - All product UI, code comments, docs, fixtures and commit messages in English.
 
@@ -20,7 +20,7 @@ Owner preferences stated explicitly during the first session (they override defa
 
 ### What the product is
 
-**Tendly** (provisional name, no trademark search; repository still called `living-buddy`; renaming the GitHub repo is an owner action) is a calm, visually simple life-administration and focus app for people who benefit from clear structure, including people with ADHD. Promise: "fewer things to remember", not another demanding productivity system. Mascot: **Pim**, an original pastel penguin-like creature with a rounded body, side flippers and one antenna (original SVG, several poses), used sparingly (onboarding, tips, empty states), dismissible, with a quiet mode and reduced motion.
+**Tendly** (provisional name, no trademark search) is a calm, visually simple life-administration and focus app for people who benefit from clear structure, including people with ADHD. Promise: "fewer things to remember", not another demanding productivity system. Mascot: **Pim**, an original pastel penguin-like creature with a rounded body, side flippers and one antenna (original SVG, several poses), used sparingly (onboarding, tips, empty states), dismissible, with a quiet mode and reduced motion.
 
 Users: individuals, partners, families, friends, roommates, small project teams, custom groups, on a trusted local computer or LAN; later a protected remote/hosted mode.
 
@@ -76,10 +76,9 @@ Acceptance criteria:
 
 ### Access
 
-- Public repo: `https://github.com/gigacook/living-buddy` (public; do not change its visibility). Branch to use: `main`. A leftover branch `claude/living-buddy-build-6w7uwy` points at an older commit and can be ignored or deleted.
-- At the time of writing `main` contains: `1a12f65` Initial commit → `8e33278` core build → `7c2ad9c` Tauri shell/frontend/e2e → `8147217` deploy/CI/docs/index → `a83d280` index CI verification → a final commit adding `./tendly`, docs updates and the sanitized `HANDOFF.md` (run `git log --oneline -8` to confirm).
-- CI: `.github/workflows/ci.yml`, jobs `rust`, `web` (incl. Playwright), `native-linux`; triggers on push to `main` and `claude/**`, and on PRs. Last verified green: run 37164064826 on `a83d280` (side branch). The run on `main` for `a83d280` was queued when this was written; check it.
-- Anything else from the first session (running servers, `/tmp` files, Docker images, scratch Dockerfiles, Xvfb) is gone. Do not assume any of it.
+- Public repo: `https://github.com/gigacook/tendly` (public; do not change its visibility). `main` is the only branch; work there.
+- CI: `.github/workflows/ci.yml`, jobs `rust`, `web` (incl. Playwright), `native-linux`; triggers on push to `main` and `claude/**`, and on PRs. Green on `main` at `64d1984`.
+- Only the repository carries over: no running servers, temp files, Docker images or display servers exist. Set up what you need.
 
 ### Stack and versions (as pinned in lockfiles)
 
@@ -103,7 +102,7 @@ Acceptance criteria:
 | Server CLI | `tendly serve | worker [--once] [--interval-secs N] | backup --out F | restore | export --out F | seed-demo | device add/list/... | gen-key | check-config` |
 | Docker | `cd deploy && cp .env.example .env && mkdir -p secrets && docker run --rm tendly:local gen-key > secrets/encryption.key && docker compose build && docker compose up -d` (host networking; see `docs/self-host.md`) |
 
-In the Claude Code cloud container: Chromium for Playwright is preinstalled at `/opt/pw-browsers` (do not run `playwright install`); WebKit is **not** available there. Outbound HTTPS goes through a proxy with a custom CA (`/root/.ccr/ca-bundle.crt`); Docker builds inside that container need the CA injected (the first session used a scratch Dockerfile with `--build-context ca=/root/.ccr`, not committed) and `dockerd` had to be started manually.
+In the Claude Code cloud container: Chromium for Playwright is preinstalled at `/opt/pw-browsers` (do not run `playwright install`); WebKit is **not** available there. Outbound HTTPS goes through a proxy with a custom CA (`/root/.ccr/ca-bundle.crt`); Docker builds inside that container need the CA injected (e.g. a scratch Dockerfile using `--build-context ca=/root/.ccr`; never commit it) and `dockerd` must be started manually.
 
 ### Configuration (names only; never commit values)
 
@@ -127,17 +126,17 @@ Deployment: none. No authorized deployment target exists; nothing is deployed.
 
 ## 4. Actual build state
 
-Evidence below comes from the first session's runs on Linux x86_64 (the cloud container) and GitHub CI. Re-run before relying on it.
+State as of `64d1984` (2026-10-04), from runs on Linux x86_64 (the cloud container) and GitHub CI. Re-run before relying on it.
 
 ### Verified working (automated tests + manual/browser checks)
 
-- Rust: 182 tests passing (core 138, server unit 17, integration: security 7, tasks 8, calendar 6, connectors 6); fmt and clippy `-D warnings` clean; CI green on `a83d280`.
+- `./tendly test` passes end to end. `./tendly demo` on a fresh `git clone` installs dependencies, builds web app and release server (about 8 minutes cold), seeds demo data and serves the app (`/healthz` ok, `/api/members` returns demo people, `/` serves the UI).
+- Rust: 182 tests passing (core 138, server unit 17, integration: security 7, tasks 8, calendar 6, connectors 6); fmt and clippy `-D warnings` clean; CI green on `main`.
 - Web: ESLint, `tsc`, 36 Vitest unit/component tests (incl. WCAG contrast checks parsing `tokens.css`), production build.
 - Playwright: 15 passing, 1 skipped by design, in Chromium at 1280×860 and Pixel 7 emulation; axe WCAG 2.2 AA clean on all pages in light and dark; asserts no horizontal page scroll; skip link, dialog focus. The 8 tests (each run on desktop and phone projects): onboarding + quick add + complete/undo; routine from a template rotates and moves to its next date; project board add card + keyboard "Move to"; focus timer survives reload and pauses; calendar import, agenda, export and revocable share link; inbox paste → confirm suggestion; axe on every main page; keyboard skip link + dialog focus (desktop only — the skipped one). **Not covered by any browser test:** groups and nudges, the usage card, settings/admin (AI provider, connectors, devices, backup), remote-mode pairing, calendar subscriptions/filters/history UI, conflict UI, alarms/countdowns.
 - Covered by Rust tests: timer persistence and sleep recovery, recurring chores, reassignment/history, Kanban transitions, group scoping, calendar filtering, share revocation, ICS round trips, recurring/all-day/DST, merge dedupe and conflicts, secret redaction, admin/authorization boundaries, SSRF, connector retries and duplicate ingestion, untrusted content handling, Gmail/Graph/Slack adapters against **mock** servers.
 - Native Linux: Tauri app compiled and launched under Xvfb; UI rendered and created its DB via the in-process API. Not packaged, not used interactively.
 - Docker image: built and run in the container (healthy, non-root, refuses non-loopback bind in local mode). Compose itself not run end to end.
-- `./tendly demo` (added at the end of session 1) built and served the app from the working checkout (UI HTML served, demo members returned by `/api/members`). Fresh-clone run and `./tendly test` results: see the "Last session's final checks" line at the end of this handoff.
 - Secret scanning (detect-secrets) on the public tree: only synthetic fixtures flagged. Manual check found no private terms in public files.
 
 ### Implemented but unverified with real services
@@ -170,11 +169,11 @@ Evidence below comes from the first session's runs on Linux x86_64 (the cloud co
 
 ### Known traps and decisions worth keeping
 
-- `TimerCommand` serde uses tag `action` and `rename_all_fields = "camelCase"`; snake_case fields were silently ignored before this fix.
+- `TimerCommand` serde uses tag `action` and `rename_all_fields = "camelCase"`; without it snake_case fields are silently ignored.
 - SQLite `COALESCE(MAX(position),0)+1` decodes as integer; cast to REAL for f64 positions.
-- Default quiet hours made notification tests time-dependent; tests clear quiet hours; self "usage" notifications bypass quiet hours.
+- Default quiet hours make notification tests time-dependent; tests must clear quiet hours. Self "usage" notifications bypass quiet hours.
 - Native `<dialog>.showModal()` focuses the Close button; the app moves focus to `[data-autofocus]` or the first field.
-- Horizontal scroll on phone came from absolutely positioned visually-hidden labels in scroll containers; containers are `position: relative` and grid/stack children `min-width: 0`. E2E asserts no page-level horizontal scroll — keep it.
+- Absolutely positioned visually-hidden labels inside scroll containers cause horizontal scroll on phone; keep containers `position: relative` and grid/stack children `min-width: 0`. E2E asserts no page-level horizontal scroll — keep it.
 - Main element must not grab focus on first render or the skip link stops being the first Tab stop.
 - Category colours appear on content surfaces only; pickers stay neutral (explicit requirement).
 - Business rules stay in `crates/core`; the frontend formats only.
@@ -186,7 +185,7 @@ The owner keeps some planning material and non-public modules outside this repos
 
 ## 5. Independent product-gap assessment
 
-### A. Known gaps (from the first session)
+### A. Known gaps
 
 Priority 1 — integrity/security:
 - Confirm remote mode end to end in a browser (device pairing, admin token, CSRF) — integration tests exist but no Playwright journey.
@@ -257,7 +256,7 @@ Do not promote speculative features (new integrations, analytics, hosted launch)
 - Replace unnecessary "needs user check" items with executable verification.
 - Never fabricate credentials, external access, test evidence, or user acceptance.
 - Do not treat mocks as proof that real integrations work.
-- Ask only when progress genuinely requires unavailable information, a consequential product decision (e.g. license, repo rename), authorization, or an irreversible/high-impact action.
+- Ask only when progress genuinely requires unavailable information, a consequential product decision (e.g. license, final product name), authorization, or an irreversible/high-impact action.
 - Do not purchase, publish, deploy to production, delete important data, or change external accounts without authorization.
 - When one area is blocked, complete independent work rather than stopping the entire build.
 
@@ -274,10 +273,6 @@ Completion checks for this product:
 
 Loop implement → run → inspect → fix until the criteria are met or a genuine external blocker (missing SDK, credentials, authorization) stops a specific item; then continue with everything else. "Initial tasks completed" is not a stopping condition. Passing unit tests or a successful build alone do not prove a journey works.
 
-Final closeout must state: what is complete; what was run and the results; remaining limitations, failures and unverified behavior; exact run/use instructions (`./tendly …`); only unavoidable owner actions (each with reason and minimum input — e.g. OAuth app credentials, license choice, repo rename, a deployment target). Distinguish implementation-complete, locally verified, release-ready and user-accepted; claim nothing stronger than the evidence.
+Final closeout must state: what is complete; what was run and the results; remaining limitations, failures and unverified behavior; exact run/use instructions (`./tendly …`); only unavoidable owner actions (each with reason and minimum input — e.g. OAuth app credentials, license choice, a deployment target). Distinguish implementation-complete, locally verified, release-ready and user-accepted; claim nothing stronger than the evidence.
 
-If you must stop early, update `HANDOFF.md` with: current state, last completed change and check, any broken in-progress state, next concrete action, remaining acceptance criteria, exact blockers.
-
----
-
-Last session's final checks (2026-10-04, Linux x86_64 cloud container): `./tendly test` passed end to end (Rust 182 tests across 9 test binaries, fmt + clippy clean; ESLint, tsc, 36 Vitest tests, production build; Playwright 15 passed / 1 skipped incl. axe). `./tendly demo` on a fresh `git clone` (no `node_modules`, no build output) installed dependencies, built the web app and the release server (about 8 minutes cold), seeded demo data and served the app: `/healthz` returned `ok`, `/api/members` returned the demo people, `/` served the UI.
+If you must stop early, update `HANDOFF.md` with: current state, last completed change and check, any broken in-progress state, next concrete action, remaining acceptance criteria, exact blockers. Replace stale state rather than appending a log.

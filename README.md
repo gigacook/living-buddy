@@ -2,7 +2,7 @@
 
 **Fewer things to remember.** Tendly is a calm, self-hostable app for everyday life admin: tasks and household routines, focus timers, shared calendars and lightweight coordination with the people you live or work with. It is designed to be gentle for people who benefit from clear structure, including people with ADHD: one obvious next action, no guilt-based streaks, no productivity rankings.
 
-> "Tendly" is a provisional product name; no trademark search has been done. The repository is called `living-buddy`.
+> "Tendly" is a provisional product name; no trademark search has been done.
 
 <p align="center"><img src="apps/web/public/favicon.svg" width="96" alt="Pim, Tendly's mascot: a round lavender penguin-like creature with a single antenna"></p>
 

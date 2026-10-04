@@ -1,5 +1,5 @@
 {
-  "project": "Tendly (repository: living-buddy)",
+  "project": "Tendly",
   "description": "Publishable feature index for the self-hostable app. Status values: implemented, partial, scaffolded, blocked, not_started.",
   "features": [
     {

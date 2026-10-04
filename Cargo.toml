@@ -9,7 +9,7 @@ exclude = ["apps/native/src-tauri"]
 version = "0.1.0"
 edition = "2021"
 publish = false
-repository = "https://github.com/gigacook/living-buddy"
+repository = "https://github.com/gigacook/tendly"
 rust-version = "1.80"
 
 [workspace.dependencies]
