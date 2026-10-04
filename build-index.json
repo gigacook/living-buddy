@@ -497,14 +497,14 @@
     },
     {
       "id": "deploy.ci",
-      "title": "GitHub Actions CI",
-      "status": "scaffolded",
+      "title": "GitHub Actions CI (Rust, web incl. e2e, native Linux)",
+      "status": "implemented",
       "paths": [
         ".github/workflows/ci.yml"
       ],
-      "limitations": [
-        "Workflow not yet executed on GitHub at the time of writing"
-      ]
+      "platforms": {
+        "linux": "all three jobs passed on GitHub Actions (ubuntu-24.04)"
+      }
     },
     {
       "id": "deploy.docker",
