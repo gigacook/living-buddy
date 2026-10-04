@@ -1,0 +1,112 @@
+#!/usr/bin/env bash
+# One entry point for running, developing and testing Tendly from a checkout.
+#
+#   ./tendly            install what is missing, build, and start on http://127.0.0.1:7878
+#   ./tendly demo       same, with synthetic demo data on first run
+#   ./tendly dev        API server + hot-reloading UI on http://127.0.0.1:5173
+#   ./tendly test       every check CI runs (Rust + web + browser end-to-end)
+#   ./tendly test quick everything except the browser end-to-end tests
+#   ./tendly app        build the native desktop app (needs the Tauri OS prerequisites)
+#
+# Needs Rust 1.80+ and Node.js 20+. Data is kept in ./data (TENDLY_DATA_DIR overrides it).
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$ROOT"
+
+say() { printf '\033[1;35m›\033[0m %s\n' "$*"; }
+die() { printf '\033[1;31m✗\033[0m %s\n' "$*" >&2; exit 1; }
+
+need_tools() {
+  command -v cargo >/dev/null || die "Rust is not installed. Get it from https://rustup.rs and run this again."
+  command -v node >/dev/null || die "Node.js 20+ is not installed. Get it from https://nodejs.org and run this again."
+  local major
+  major="$(node -p 'process.versions.node.split(".")[0]')"
+  [ "$major" -ge 20 ] || die "Node.js $major is too old; Tendly needs 20 or newer."
+}
+
+# Installs JavaScript dependencies only when they are missing or the lockfile changed.
+deps() {
+  if [ ! -d node_modules ] || [ package-lock.json -nt node_modules/.package-lock.json ]; then
+    say "Installing JavaScript dependencies"
+    npm ci --no-audit --no-fund --loglevel=error
+  fi
+}
+
+# Rebuilds the web UI only when its sources are newer than the last build.
+web_build() {
+  local stamp=apps/web/dist/index.html
+  if [ ! -f "$stamp" ] || [ -n "$(find apps/web/src apps/web/public apps/web/index.html packages/contracts/src -newer "$stamp" -print -quit)" ]; then
+    say "Building the web app"
+    npm run build -w @tendly/web --silent
+  fi
+}
+
+server_build() {
+  say "Building the server"
+  cargo build --release --quiet -p tendly-server
+}
+
+start() {
+  local demo="${1:-}"
+  need_tools
+  deps
+  web_build
+  server_build
+  if [ "$demo" = demo ]; then
+    ./target/release/tendly seed-demo
+  fi
+  export TENDLY_WEB_DIR="$ROOT/apps/web/dist"
+  export TENDLY_LOG="${TENDLY_LOG:-warn}"
+  say "Tendly is running at http://${TENDLY_BIND:-127.0.0.1:7878}  (Ctrl+C to stop)"
+  exec ./target/release/tendly serve
+}
+
+dev() {
+  need_tools
+  deps
+  say "API on http://127.0.0.1:7878, UI on http://127.0.0.1:5173  (Ctrl+C stops both)"
+  cargo run --quiet -p tendly-server -- serve &
+  local api=$!
+  trap 'kill "$api" 2>/dev/null || true' EXIT INT TERM
+  npm run dev -w @tendly/web
+}
+
+run_tests() {
+  local mode="${1:-all}"
+  need_tools
+  deps
+  say "Rust: format";      cargo fmt --all --check
+  say "Rust: lint";        cargo clippy --workspace --all-targets --locked --quiet -- -D warnings
+  say "Rust: tests";       cargo test --workspace --locked --quiet
+  say "Web: lint";         npm run lint --silent
+  say "Web: types";        npm run typecheck --silent
+  say "Web: unit tests";   npm test --silent
+  say "Web: build";        npm run build -w @tendly/web --silent
+  if [ "$mode" = quick ]; then
+    say "All checks passed (browser end-to-end tests skipped)."
+    return
+  fi
+  say "Browser end-to-end + accessibility tests"
+  if ! (cd apps/web && npx playwright test); then
+    die "End-to-end tests failed. If Chromium is missing, run: (cd apps/web && npx playwright install chromium)"
+  fi
+  say "All checks passed."
+}
+
+app() {
+  need_tools
+  deps
+  say "Building the native app (installers end up in apps/native/src-tauri/target/release/bundle)"
+  (cd apps/native && npx tauri build)
+}
+
+case "${1:-start}" in
+  start) start ;;
+  demo) start demo ;;
+  dev) dev ;;
+  test) run_tests "${2:-all}" ;;
+  app) app ;;
+  -h | --help | help) sed -n '2,11p' "$0" | sed 's/^# \{0,1\}//' ;;
+  *) die "Unknown command '$1'. Try: ./tendly help" ;;
+esac

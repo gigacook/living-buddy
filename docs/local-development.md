@@ -9,11 +9,12 @@
 ## First run
 
 ```bash
-npm install
-cargo run -p tendly-server -- seed-demo     # optional synthetic demo data
-cargo run -p tendly-server -- serve          # API on http://127.0.0.1:7878
-npm run dev                                  # UI on http://127.0.0.1:5173 (proxies /api)
+./tendly demo     # installs dependencies, builds, seeds synthetic demo data, serves http://127.0.0.1:7878
+./tendly dev      # API on http://127.0.0.1:7878 plus hot-reloading UI on http://127.0.0.1:5173
+./tendly test     # all checks CI runs (add "quick" to skip browser tests)
 ```
+
+`./tendly help` lists every command. The steps it runs are plain `npm` and `cargo` commands, listed below if you prefer to run them yourself.
 
 Data lives in `./data` by default (`TENDLY_DATA_DIR`). The encryption key for stored tokens is generated at `./data/secrets/encryption.key` the first time; see [security.md](security.md) for better places to keep it.
 

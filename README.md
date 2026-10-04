@@ -25,17 +25,25 @@ See [`build-index.json`](build-index.json) for a per-feature status list with so
 
 ## Quick start (local)
 
-Requirements: Rust 1.80+ and Node 20+.
+Requirements: Rust 1.80+ and Node.js 20+. From the repository root:
 
 ```bash
-npm install
-npm run build                      # builds the web app into apps/web/dist
-cargo run -p tendly-server -- seed-demo   # optional: synthetic demo data
-TENDLY_WEB_DIR=apps/web/dist cargo run -p tendly-server -- serve
-# open http://127.0.0.1:7878
+./tendly demo      # first run: installs, builds, adds synthetic demo data, starts the app
+./tendly           # afterwards: start the app
 ```
 
-For development with hot reload, run `cargo run -p tendly-server -- serve` and `npm run dev` (Vite proxies `/api` to the server) and open http://127.0.0.1:5173. Details: [docs/local-development.md](docs/local-development.md).
+Then open http://127.0.0.1:7878. Everything stays on your computer (data in `./data`); press Ctrl+C to stop.
+
+| Command | What it does |
+| --- | --- |
+| `./tendly` | Install what is missing, build, and start on http://127.0.0.1:7878 |
+| `./tendly demo` | Same, adding synthetic demo data on the first run |
+| `./tendly dev` | API server plus hot-reloading UI on http://127.0.0.1:5173 |
+| `./tendly test` | Every check CI runs: Rust format, lint and tests; web lint, types, unit tests and build; browser end-to-end and accessibility tests |
+| `./tendly test quick` | The same without the browser tests |
+| `./tendly app` | Build the native desktop app (needs the [Tauri prerequisites](docs/local-development.md#native-app-tauri-2)) |
+
+The script only rebuilds what changed. Details: [docs/local-development.md](docs/local-development.md). To run Tendly as a service instead, see [docs/self-host.md](docs/self-host.md).
 
 ## Documentation
 
