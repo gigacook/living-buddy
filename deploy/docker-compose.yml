@@ -1,0 +1,50 @@
+# Tendly with Docker Compose.
+#
+# Uses host networking so Tendly keeps its safest default: listening on the
+# host's loopback (127.0.0.1:7878) in local mode, with administration
+# available from this computer only. Host networking works on Linux; on
+# Docker Desktop enable it in settings or see docs/self-host.md for the LAN
+# and remote alternatives.
+#
+# Scheduling: by default the server's embedded worker refreshes calendars and
+# connectors. If you enable the separate "worker" profile, set
+# TENDLY_EMBEDDED_WORKER=false so only one scheduler runs.
+services:
+  tendly:
+    build: ..
+    image: tendly:local
+    restart: unless-stopped
+    network_mode: host
+    env_file:
+      - .env
+    environment:
+      TENDLY_MODE: local
+      TENDLY_BIND: 127.0.0.1:7878
+    volumes:
+      - tendly-data:/data
+      # Encryption key kept outside the database volume (create with: tendly gen-key > secrets/encryption.key)
+      - ./secrets:/run/secrets/tendly:ro
+    read_only: true
+    tmpfs: ["/tmp"]
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: ["ALL"]
+
+  # Optional dedicated worker for connectors and calendar refresh.
+  worker:
+    profiles: ["worker"]
+    image: tendly:local
+    restart: unless-stopped
+    command: ["worker", "--interval-secs", "120"]
+    env_file:
+      - .env
+    network_mode: host
+    volumes:
+      - tendly-data:/data
+      - ./secrets:/run/secrets/tendly:ro
+    read_only: true
+    tmpfs: ["/tmp"]
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: ["ALL"]
+
+volumes:
+  tendly-data:

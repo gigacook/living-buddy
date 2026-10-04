@@ -1,0 +1,1157 @@
+{
+  "project": "Tendly (repository: living-buddy)",
+  "description": "Publishable feature index for the self-hostable app. Status values: implemented, partial, scaffolded, blocked, not_started.",
+  "features": [
+    {
+      "id": "a11y.wcag22aa",
+      "title": "WCAG 2.2 AA target",
+      "status": "partial",
+      "paths": [
+        "apps/web/src"
+      ],
+      "tests": [
+        "apps/web/e2e/app.spec.ts",
+        "apps/web/src/lib/contrast.test.ts"
+      ],
+      "platforms": {
+        "browser": "verified (Chromium desktop + phone emulation)",
+        "linux": "native shell built and launched",
+        "macos": "not verified",
+        "windows": "not verified",
+        "ios": "not verified",
+        "android": "not verified"
+      },
+      "verification": "axe-core WCAG 2.0/2.1/2.2 A+AA rules pass on all main pages (light and dark, desktop and phone); keyboard and dialog focus tests",
+      "limitations": [
+        "No manual screen-reader testing (NVDA/VoiceOver/TalkBack)",
+        "No manual audit by an accessibility specialist"
+      ]
+    },
+    {
+      "id": "ai.byok",
+      "title": "Bring-your-own-key AI providers (Anthropic; OpenAI-compatible)",
+      "status": "partial",
+      "paths": [
+        "crates/server/src/ai.rs"
+      ],
+      "tests": [
+        "crates/server/src/ai.rs"
+      ],
+      "platforms": {
+        "linux": "verified (tests)"
+      },
+      "verification": "Anthropic adapter verified against a local mock",
+      "limitations": [
+        "Not tested with a real API key",
+        "OpenAI-compatible adapter untested"
+      ]
+    },
+    {
+      "id": "ai.extraction",
+      "title": "Structured extraction with strict validation and uncertainty flags; local rules",
+      "status": "implemented",
+      "paths": [
+        "crates/core/src/extraction.rs"
+      ],
+      "tests": [
+        "crates/core/src/extraction.rs"
+      ],
+      "platforms": {
+        "linux": "verified (tests)"
+      }
+    },
+    {
+      "id": "api.contracts",
+      "title": "Typed API contracts generated from Rust",
+      "status": "implemented",
+      "paths": [
+        "crates/core/src/api.rs",
+        "packages/contracts"
+      ],
+      "tests": [
+        "crates/core/src/api.rs"
+      ],
+      "platforms": {
+        "linux": "verified (tests)"
+      }
+    },
+    {
+      "id": "api.health",
+      "title": "Health and readiness endpoints",
+      "status": "implemented",
+      "routes": [
+        "GET /healthz",
+        "GET /readyz"
+      ],
+      "tests": [
+        "crates/server/tests/security.rs"
+      ],
+      "platforms": {
+        "linux": "verified (tests)"
+      }
+    },
+    {
+      "id": "app.shell",
+      "title": "Accessible responsive application shell",
+      "status": "implemented",
+      "paths": [
+        "apps/web/src/App.tsx",
+        "apps/web/src/styles"
+      ],
+      "tests": [
+        "apps/web/e2e/app.spec.ts"
+      ],
+      "platforms": {
+        "browser": "verified (Chromium desktop + phone emulation)",
+        "linux": "native shell built and launched",
+        "macos": "not verified",
+        "windows": "not verified",
+        "ios": "not verified",
+        "android": "not verified"
+      },
+      "verification": "Playwright e2e at 1280x860 and Pixel 7 emulation; skip link, focus management, no horizontal page scroll"
+    },
+    {
+      "id": "calendar.caldav",
+      "title": "CalDAV adapter and provider write-back",
+      "status": "not_started",
+      "limitations": [
+        "Boundary documented in docs/calendars.md; no write-back to any provider"
+      ]
+    },
+    {
+      "id": "calendar.filters",
+      "title": "Filter by person, group, category, date range and source",
+      "status": "implemented",
+      "routes": [
+        "GET /api/calendar/occurrences"
+      ],
+      "tests": [
+        "crates/server/tests/calendar.rs"
+      ],
+      "platforms": {
+        "browser": "verified (Chromium desktop + phone emulation)",
+        "linux": "native shell built and launched",
+        "macos": "not verified",
+        "windows": "not verified",
+        "ios": "not verified",
+        "android": "not verified"
+      }
+    },
+    {
+      "id": "calendar.history",
+      "title": "Calendar change history with actor/unknown actor, timestamp, source, operation, revision, before/after",
+      "status": "implemented",
+      "routes": [
+        "GET /api/calendar/changes"
+      ],
+      "tests": [
+        "crates/server/tests/calendar.rs"
+      ],
+      "platforms": {
+        "browser": "verified (Chromium desktop + phone emulation)",
+        "linux": "native shell built and launched",
+        "macos": "not verified",
+        "windows": "not verified",
+        "ios": "not verified",
+        "android": "not verified"
+      }
+    },
+    {
+      "id": "calendar.ics_export",
+      "title": "ICS export with stable UIDs, DTSTAMP, LAST-MODIFIED, SEQUENCE, VTIMEZONE",
+      "status": "implemented",
+      "paths": [
+        "crates/core/src/ics.rs",
+        "crates/server/src/calendar.rs"
+      ],
+      "routes": [
+        "GET /api/calendar/export.ics"
+      ],
+      "tests": [
+        "crates/core/src/ics.rs",
+        "crates/server/tests/calendar.rs",
+        "apps/web/e2e/app.spec.ts"
+      ],
+      "platforms": {
+        "browser": "verified (Chromium desktop + phone emulation)",
+        "linux": "native shell built and launched",
+        "macos": "not verified",
+        "windows": "not verified",
+        "ios": "not verified",
+        "android": "not verified"
+      }
+    },
+    {
+      "id": "calendar.ics_import",
+      "title": "ICS file import with safe parsing",
+      "status": "implemented",
+      "paths": [
+        "crates/core/src/ics.rs",
+        "crates/server/src/routes/calendar.rs"
+      ],
+      "routes": [
+        "POST /api/calendar/import"
+      ],
+      "tests": [
+        "crates/core/src/ics.rs",
+        "crates/server/tests/calendar.rs",
+        "apps/web/e2e/app.spec.ts"
+      ],
+      "platforms": {
+        "browser": "verified (Chromium desktop + phone emulation)",
+        "linux": "native shell built and launched",
+        "macos": "not verified",
+        "windows": "not verified",
+        "ios": "not verified",
+        "android": "not verified"
+      }
+    },
+    {
+      "id": "calendar.json_export",
+      "title": "JSON calendar endpoint and export",
+      "status": "implemented",
+      "routes": [
+        "GET /api/calendar/occurrences",
+        "GET /api/calendar/export.json"
+      ],
+      "tests": [
+        "crates/server/tests/calendar.rs"
+      ],
+      "platforms": {
+        "browser": "verified (Chromium desktop + phone emulation)",
+        "linux": "native shell built and launched",
+        "macos": "not verified",
+        "windows": "not verified",
+        "ios": "not verified",
+        "android": "not verified"
+      }
+    },
+    {
+      "id": "calendar.merge",
+      "title": "Multiple sources, deterministic de-duplication, local overrides, per-source removal",
+      "status": "implemented",
+      "paths": [
+        "crates/core/src/merge.rs",
+        "crates/server/src/calendar.rs"
+      ],
+      "tests": [
+        "crates/core/src/merge.rs",
+        "crates/server/tests/calendar.rs"
+      ],
+      "platforms": {
+        "linux": "verified (tests)"
+      }
+    },
+    {
+      "id": "calendar.recurrence_tz",
+      "title": "Recurrence, exclusions, all-day events, time zones and DST",
+      "status": "implemented",
+      "paths": [
+        "crates/core/src/recurrence.rs",
+        "crates/core/src/ics.rs"
+      ],
+      "tests": [
+        "crates/core/src/recurrence.rs",
+        "crates/core/src/ics.rs",
+        "crates/server/tests/calendar.rs"
+      ],
+      "platforms": {
+        "linux": "verified (tests)"
+      },
+      "limitations": [
+        "Unsupported RRULE parts (BYSETPOS, BYHOUR, BYWEEKNO, sub-daily) show only the first occurrence with a warning",
+        "VTIMEZONE bodies from feeds are not evaluated; IANA zones are used"
+      ]
+    },
+    {
+      "id": "calendar.sharing",
+      "title": "Scoped, revocable, expiring read-only share links (HTML, ICS, JSON); off by default",
+      "status": "implemented",
+      "paths": [
+        "crates/server/src/routes/shares.rs",
+        "crates/server/src/share_render.rs",
+        "crates/core/src/share.rs"
+      ],
+      "routes": [
+        "GET/POST /api/shares",
+        "POST /api/shares/{id}/revoke",
+        "GET /share/{token}[/calendar.ics|.json]"
+      ],
+      "tests": [
+        "crates/core/src/share.rs",
+        "crates/server/tests/calendar.rs",
+        "apps/web/e2e/app.spec.ts"
+      ],
+      "platforms": {
+        "browser": "verified (Chromium desktop + phone emulation)",
+        "linux": "native shell built and launched",
+        "macos": "not verified",
+        "windows": "not verified",
+        "ios": "not verified",
+        "android": "not verified"
+      }
+    },
+    {
+      "id": "calendar.subscriptions",
+      "title": "Calendar URL subscriptions with polling, ETag and SSRF protection",
+      "status": "implemented",
+      "paths": [
+        "crates/server/src/fetch.rs",
+        "crates/server/src/calendar.rs",
+        "crates/server/src/worker.rs"
+      ],
+      "routes": [
+        "POST /api/calendar/sources",
+        "POST /api/calendar/sources/{id}/refresh"
+      ],
+      "tests": [
+        "crates/server/src/fetch.rs",
+        "crates/server/tests/calendar.rs",
+        "crates/server/tests/connectors.rs"
+      ],
+      "platforms": {
+        "linux": "verified (tests)"
+      },
+      "limitations": [
+        "Polling, not push"
+      ]
+    },
+    {
+      "id": "calendar.views",
+      "title": "Month, week and agenda views",
+      "status": "implemented",
+      "paths": [
+        "apps/web/src/pages/Calendar.tsx"
+      ],
+      "tests": [
+        "apps/web/e2e/app.spec.ts"
+      ],
+      "platforms": {
+        "browser": "verified (Chromium desktop + phone emulation)",
+        "linux": "native shell built and launched",
+        "macos": "not verified",
+        "windows": "not verified",
+        "ios": "not verified",
+        "android": "not verified"
+      }
+    },
+    {
+      "id": "connectors.fixture",
+      "title": "Synthetic sample mailbox connector",
+      "status": "implemented",
+      "paths": [
+        "crates/server/src/connectors.rs",
+        "integrations/fixtures/mail"
+      ],
+      "tests": [
+        "crates/server/tests/connectors.rs"
+      ],
+      "platforms": {
+        "linux": "verified (tests)"
+      }
+    },
+    {
+      "id": "connectors.gmail",
+      "title": "Gmail connector (OAuth PKCE, history cursor, refresh, revocation)",
+      "status": "implemented",
+      "paths": [
+        "crates/server/src/connectors.rs",
+        "crates/server/src/routes/admin.rs"
+      ],
+      "tests": [
+        "crates/server/tests/connectors.rs"
+      ],
+      "platforms": {
+        "linux": "verified (tests)"
+      },
+      "verification": "Against a local mock of the Gmail and token APIs only",
+      "limitations": [
+        "Not tested against real Google accounts",
+        "Requires the owner's own OAuth client; Google verification may be needed"
+      ]
+    },
+    {
+      "id": "connectors.outlook",
+      "title": "Outlook / Microsoft 365 connector (Graph delta, OAuth PKCE)",
+      "status": "implemented",
+      "paths": [
+        "crates/server/src/connectors.rs"
+      ],
+      "tests": [
+        "crates/server/tests/connectors.rs"
+      ],
+      "platforms": {
+        "linux": "verified (tests)"
+      },
+      "verification": "Against a local mock of Microsoft Graph delta paging only",
+      "limitations": [
+        "Not tested against real Microsoft accounts",
+        "Requires the owner's own Entra ID app registration"
+      ]
+    },
+    {
+      "id": "connectors.proton",
+      "title": "Proton Mail via Proton Mail Bridge (IMAP)",
+      "status": "scaffolded",
+      "paths": [
+        "crates/server/src/connectors.rs"
+      ],
+      "limitations": [
+        "IMAP reader not implemented"
+      ]
+    },
+    {
+      "id": "connectors.slack",
+      "title": "Slack connector (bot token, channel history)",
+      "status": "partial",
+      "paths": [
+        "crates/server/src/connectors.rs"
+      ],
+      "tests": [
+        "crates/server/tests/connectors.rs"
+      ],
+      "platforms": {
+        "linux": "verified (tests)"
+      },
+      "verification": "Mock-verified",
+      "limitations": [
+        "No OAuth install flow"
+      ]
+    },
+    {
+      "id": "connectors.worker",
+      "title": "Durable job queue, scheduler, retries with backoff, idempotency; compose/systemd/cron alternatives",
+      "status": "implemented",
+      "paths": [
+        "crates/server/src/worker.rs",
+        "deploy"
+      ],
+      "tests": [
+        "crates/server/tests/connectors.rs"
+      ],
+      "platforms": {
+        "linux": "verified (tests)"
+      }
+    },
+    {
+      "id": "coordination.nudges",
+      "title": "Opt-in cooperative reminders with quiet hours and anti-spam limits",
+      "status": "implemented",
+      "paths": [
+        "crates/core/src/notify.rs",
+        "crates/server/src/routes/misc.rs"
+      ],
+      "routes": [
+        "POST /api/nudges",
+        "GET /api/notifications"
+      ],
+      "tests": [
+        "crates/core/src/notify.rs",
+        "crates/server/tests/tasks.rs"
+      ],
+      "platforms": {
+        "browser": "verified (Chromium desktop + phone emulation)",
+        "linux": "native shell built and launched",
+        "macos": "not verified",
+        "windows": "not verified",
+        "ios": "not verified",
+        "android": "not verified"
+      },
+      "limitations": [
+        "Delivered in-app (and as a system notification while the app is open); no push service"
+      ]
+    },
+    {
+      "id": "data.backup_export",
+      "title": "Backup, restore and JSON export without secrets",
+      "status": "implemented",
+      "paths": [
+        "crates/server/src/backup.rs"
+      ],
+      "routes": [
+        "tendly backup|restore|export",
+        "GET /api/admin/export"
+      ],
+      "tests": [
+        "crates/server/src/backup.rs",
+        "crates/server/tests/security.rs"
+      ],
+      "platforms": {
+        "linux": "verified (tests)"
+      }
+    },
+    {
+      "id": "data.demo",
+      "title": "Synthetic demo data",
+      "status": "implemented",
+      "paths": [
+        "crates/server/src/seed.rs"
+      ],
+      "routes": [
+        "tendly seed-demo"
+      ],
+      "platforms": {
+        "linux": "verified (tests)"
+      }
+    },
+    {
+      "id": "deploy.ci",
+      "title": "GitHub Actions CI",
+      "status": "scaffolded",
+      "paths": [
+        ".github/workflows/ci.yml"
+      ],
+      "limitations": [
+        "Workflow not yet executed on GitHub at the time of writing"
+      ]
+    },
+    {
+      "id": "deploy.docker",
+      "title": "Dockerfile and Compose",
+      "status": "implemented",
+      "paths": [
+        "Dockerfile",
+        "deploy/docker-compose.yml"
+      ],
+      "platforms": {
+        "linux": "image built and container run (health, non-root, refuses public bind in local mode)"
+      },
+      "verification": "Built in the build environment with its TLS proxy CA injected through a local-only Dockerfile variant; the committed Dockerfile is unchanged",
+      "limitations": [
+        "Compose stack not run end-to-end"
+      ]
+    },
+    {
+      "id": "deploy.public_site",
+      "title": "Public deployment",
+      "status": "blocked",
+      "limitations": [
+        "No authorized deployment target was configured"
+      ]
+    },
+    {
+      "id": "deploy.systemd_cron",
+      "title": "systemd service/timer and cron examples",
+      "status": "scaffolded",
+      "paths": [
+        "deploy/systemd",
+        "deploy/cron"
+      ],
+      "limitations": [
+        "Not run under systemd or cron during the build"
+      ]
+    },
+    {
+      "id": "design.categories",
+      "title": "Six pastel categories with labels and icons; neutral pickers",
+      "status": "implemented",
+      "paths": [
+        "apps/web/src/lib/categories.ts",
+        "apps/web/src/components/pickers.tsx",
+        "apps/web/src/styles/tokens.css"
+      ],
+      "tests": [
+        "apps/web/src/lib/contrast.test.ts",
+        "apps/web/src/components/ui.test.tsx"
+      ],
+      "platforms": {
+        "browser": "verified (Chromium desktop + phone emulation)",
+        "linux": "native shell built and launched",
+        "macos": "not verified",
+        "windows": "not verified",
+        "ios": "not verified",
+        "android": "not verified"
+      },
+      "verification": "WCAG contrast computed for every category pair in light and dark themes"
+    },
+    {
+      "id": "design.mascot",
+      "title": "Original mascot (Pim) with five poses, dismissible tips, quiet mode",
+      "status": "implemented",
+      "paths": [
+        "apps/web/src/components/Mascot.tsx",
+        "apps/web/src/components/ui.tsx"
+      ],
+      "tests": [
+        "apps/web/src/components/Mascot.test.tsx",
+        "apps/web/src/components/ui.test.tsx"
+      ],
+      "platforms": {
+        "browser": "verified (Chromium desktop + phone emulation)",
+        "linux": "native shell built and launched",
+        "macos": "not verified",
+        "windows": "not verified",
+        "ios": "not verified",
+        "android": "not verified"
+      },
+      "verification": "Unit tests; visual check of screenshots"
+    },
+    {
+      "id": "docs.public",
+      "title": "Public documentation",
+      "status": "implemented",
+      "paths": [
+        "README.md",
+        "docs"
+      ]
+    },
+    {
+      "id": "extensions.router",
+      "title": "Generic extension interface for separately maintained modules",
+      "status": "implemented",
+      "paths": [
+        "crates/server/src/lib.rs"
+      ],
+      "platforms": {
+        "linux": "verified (tests)"
+      }
+    },
+    {
+      "id": "focus.alarms",
+      "title": "Alarm-clock reminders with snooze and missed-alarm handling",
+      "status": "partial",
+      "paths": [
+        "crates/core/src/alarm.rs",
+        "apps/web/src/components/Watchers.tsx"
+      ],
+      "routes": [
+        "GET/POST /api/alarms",
+        "POST /api/alarms/{id}/fired|snooze"
+      ],
+      "tests": [
+        "crates/core/src/alarm.rs",
+        "crates/server/tests/tasks.rs"
+      ],
+      "platforms": {
+        "browser": "verified (Chromium desktop + phone emulation)",
+        "linux": "native shell built and launched",
+        "macos": "not verified",
+        "windows": "not verified",
+        "ios": "not verified",
+        "android": "not verified"
+      },
+      "limitations": [
+        "Rings only while the app or tab is open",
+        "No OS-scheduled notifications for closed apps"
+      ]
+    },
+    {
+      "id": "focus.countdowns",
+      "title": "Countdowns to events and deadlines",
+      "status": "implemented",
+      "paths": [
+        "crates/server/src/routes/focus.rs"
+      ],
+      "routes": [
+        "GET/POST /api/countdowns"
+      ],
+      "tests": [
+        "crates/server/tests/tasks.rs"
+      ],
+      "platforms": {
+        "browser": "verified (Chromium desktop + phone emulation)",
+        "linux": "native shell built and launched",
+        "macos": "not verified",
+        "windows": "not verified",
+        "ios": "not verified",
+        "android": "not verified"
+      }
+    },
+    {
+      "id": "focus.pomodoro",
+      "title": "Configurable Pomodoro with pause/resume/reset/skip break",
+      "status": "implemented",
+      "paths": [
+        "crates/core/src/timer.rs"
+      ],
+      "tests": [
+        "crates/core/src/timer.rs",
+        "crates/server/tests/tasks.rs"
+      ],
+      "platforms": {
+        "browser": "verified (Chromium desktop + phone emulation)",
+        "linux": "native shell built and launched",
+        "macos": "not verified",
+        "windows": "not verified",
+        "ios": "not verified",
+        "android": "not verified"
+      }
+    },
+    {
+      "id": "focus.timer",
+      "title": "Focus timer and countdown timer with persisted deadlines and sleep recovery",
+      "status": "implemented",
+      "paths": [
+        "crates/core/src/timer.rs",
+        "crates/server/src/routes/focus.rs",
+        "apps/web/src/pages/Focus.tsx",
+        "apps/web/src/lib/useTimer.ts"
+      ],
+      "routes": [
+        "GET/POST /api/timer"
+      ],
+      "tests": [
+        "crates/core/src/timer.rs",
+        "crates/server/tests/tasks.rs",
+        "apps/web/src/lib/timer.test.ts",
+        "apps/web/e2e/app.spec.ts"
+      ],
+      "platforms": {
+        "browser": "verified (Chromium desktop + phone emulation)",
+        "linux": "native shell built and launched",
+        "macos": "not verified",
+        "windows": "not verified",
+        "ios": "not verified",
+        "android": "not verified"
+      }
+    },
+    {
+      "id": "groups.kinds",
+      "title": "Solo, partners, family, friends, roommates, project teams, custom groups",
+      "status": "implemented",
+      "paths": [
+        "crates/server/src/routes/groups.rs",
+        "apps/web/src/pages/Groups.tsx"
+      ],
+      "routes": [
+        "GET/POST /api/groups",
+        "PATCH /api/groups/{id}",
+        "POST /api/groups/{id}/join|leave"
+      ],
+      "tests": [
+        "crates/server/tests/tasks.rs",
+        "apps/web/e2e/app.spec.ts"
+      ],
+      "platforms": {
+        "browser": "verified (Chromium desktop + phone emulation)",
+        "linux": "native shell built and launched",
+        "macos": "not verified",
+        "windows": "not verified",
+        "ios": "not verified",
+        "android": "not verified"
+      }
+    },
+    {
+      "id": "groups.scoping",
+      "title": "Group scoping of tasks, activity and calendars",
+      "status": "implemented",
+      "paths": [
+        "crates/server/src/routes/groups.rs",
+        "crates/server/src/routes/tasks.rs"
+      ],
+      "tests": [
+        "crates/server/tests/tasks.rs",
+        "crates/server/tests/calendar.rs"
+      ],
+      "platforms": {
+        "browser": "verified (Chromium desktop + phone emulation)",
+        "linux": "native shell built and launched",
+        "macos": "not verified",
+        "windows": "not verified",
+        "ios": "not verified",
+        "android": "not verified"
+      },
+      "limitations": [
+        "Scoping is organisational in local/LAN mode where any name can be chosen"
+      ]
+    },
+    {
+      "id": "identity.name_only",
+      "title": "Name-only local identity with stable internal IDs",
+      "status": "implemented",
+      "paths": [
+        "crates/server/src/routes/members.rs",
+        "apps/web/src/pages/Onboarding.tsx"
+      ],
+      "routes": [
+        "GET/POST /api/members",
+        "PATCH /api/members/{id}"
+      ],
+      "tests": [
+        "crates/server/tests/tasks.rs",
+        "apps/web/e2e/app.spec.ts"
+      ],
+      "platforms": {
+        "browser": "verified (Chromium desktop + phone emulation)",
+        "linux": "native shell built and launched",
+        "macos": "not verified",
+        "windows": "not verified",
+        "ios": "not verified",
+        "android": "not verified"
+      },
+      "limitations": [
+        "Names are attribution, not authentication"
+      ]
+    },
+    {
+      "id": "inbox.review",
+      "title": "Review inbox with confirmation before any task/event is created; paste intake",
+      "status": "implemented",
+      "paths": [
+        "crates/server/src/routes/inbox.rs",
+        "apps/web/src/pages/Inbox.tsx"
+      ],
+      "routes": [
+        "GET /api/inbox/suggestions",
+        "POST /api/inbox/intake",
+        "POST /api/inbox/suggestions/{id}/accept|dismiss"
+      ],
+      "tests": [
+        "crates/server/tests/connectors.rs",
+        "apps/web/e2e/app.spec.ts"
+      ],
+      "platforms": {
+        "browser": "verified (Chromium desktop + phone emulation)",
+        "linux": "native shell built and launched",
+        "macos": "not verified",
+        "windows": "not verified",
+        "ios": "not verified",
+        "android": "not verified"
+      }
+    },
+    {
+      "id": "index.public",
+      "title": "Public sanitized build index",
+      "status": "implemented",
+      "paths": [
+        "build-index.json"
+      ]
+    },
+    {
+      "id": "native.tauri",
+      "title": "Tauri 2 shell with in-process API and least-privilege capabilities",
+      "status": "partial",
+      "paths": [
+        "apps/native/src-tauri"
+      ],
+      "tests": [
+        "apps/native/src-tauri/src/lib.rs"
+      ],
+      "platforms": {
+        "linux": "built and launched under Xvfb; UI reached the in-process API",
+        "macos": "configuration only",
+        "windows": "configuration only",
+        "ios": "configuration only",
+        "android": "configuration only"
+      }
+    },
+    {
+      "id": "notifications.platform",
+      "title": "Notification permission flow, sound controls, visual alternatives",
+      "status": "partial",
+      "paths": [
+        "apps/web/src/lib/notify.ts",
+        "apps/native/src-tauri"
+      ],
+      "platforms": {
+        "browser": "verified (Chromium desktop + phone emulation)",
+        "linux": "native shell built and launched",
+        "macos": "not verified",
+        "windows": "not verified",
+        "ios": "not verified",
+        "android": "not verified"
+      },
+      "verification": "Browser path tested via UI; native plugin compiled on Linux only",
+      "limitations": [
+        "Native notifications not verified on macOS, Windows, iOS or Android"
+      ]
+    },
+    {
+      "id": "projects.kanban",
+      "title": "Project Kanban with customizable columns, drag-and-drop and keyboard move",
+      "status": "implemented",
+      "paths": [
+        "apps/web/src/pages/GroupDetail.tsx",
+        "crates/server/src/routes/tasks.rs"
+      ],
+      "routes": [
+        "POST /api/tasks/{id}/move"
+      ],
+      "tests": [
+        "crates/server/tests/tasks.rs",
+        "apps/web/e2e/app.spec.ts"
+      ],
+      "platforms": {
+        "browser": "verified (Chromium desktop + phone emulation)",
+        "linux": "native shell built and launched",
+        "macos": "not verified",
+        "windows": "not verified",
+        "ios": "not verified",
+        "android": "not verified"
+      }
+    },
+    {
+      "id": "projects.timeline",
+      "title": "Project timeline with milestones, goal and dates",
+      "status": "implemented",
+      "paths": [
+        "apps/web/src/pages/GroupDetail.tsx"
+      ],
+      "routes": [
+        "POST /api/groups/{id}/milestones"
+      ],
+      "tests": [
+        "apps/web/e2e/app.spec.ts"
+      ],
+      "platforms": {
+        "browser": "verified (Chromium desktop + phone emulation)",
+        "linux": "native shell built and launched",
+        "macos": "not verified",
+        "windows": "not verified",
+        "ios": "not verified",
+        "android": "not verified"
+      },
+      "limitations": [
+        "Simple horizontal timeline; no dependencies or drag-to-reschedule"
+      ]
+    },
+    {
+      "id": "routines.recurring",
+      "title": "Recurring chores keep history and schedule the next occurrence (fixed or after completion)",
+      "status": "implemented",
+      "paths": [
+        "crates/core/src/recurrence.rs",
+        "crates/server/src/routes/tasks.rs"
+      ],
+      "routes": [
+        "POST /api/tasks/{id}/complete"
+      ],
+      "tests": [
+        "crates/core/src/recurrence.rs",
+        "crates/server/tests/tasks.rs",
+        "apps/web/e2e/app.spec.ts"
+      ],
+      "platforms": {
+        "browser": "verified (Chromium desktop + phone emulation)",
+        "linux": "native shell built and launched",
+        "macos": "not verified",
+        "windows": "not verified",
+        "ios": "not verified",
+        "android": "not verified"
+      }
+    },
+    {
+      "id": "routines.rotation",
+      "title": "Responsibility rotation",
+      "status": "implemented",
+      "paths": [
+        "crates/core/src/rotation.rs"
+      ],
+      "tests": [
+        "crates/core/src/rotation.rs",
+        "crates/server/tests/tasks.rs"
+      ],
+      "platforms": {
+        "browser": "verified (Chromium desktop + phone emulation)",
+        "linux": "native shell built and launched",
+        "macos": "not verified",
+        "windows": "not verified",
+        "ios": "not verified",
+        "android": "not verified"
+      }
+    },
+    {
+      "id": "routines.templates",
+      "title": "Twelve editable household routine templates",
+      "status": "implemented",
+      "paths": [
+        "crates/core/src/templates.rs",
+        "crates/server/src/routes/misc.rs"
+      ],
+      "routes": [
+        "GET /api/templates",
+        "PATCH /api/templates/{key}",
+        "POST /api/templates/{key}/use"
+      ],
+      "tests": [
+        "crates/core/src/templates.rs",
+        "crates/server/tests/tasks.rs",
+        "apps/web/e2e/app.spec.ts"
+      ],
+      "platforms": {
+        "browser": "verified (Chromium desktop + phone emulation)",
+        "linux": "native shell built and launched",
+        "macos": "not verified",
+        "windows": "not verified",
+        "ios": "not verified",
+        "android": "not verified"
+      }
+    },
+    {
+      "id": "security.modes",
+      "title": "Local (loopback) default, explicit LAN allowlist, remote mode with device pairing",
+      "status": "implemented",
+      "paths": [
+        "crates/server/src/config.rs",
+        "crates/server/src/security.rs"
+      ],
+      "tests": [
+        "crates/server/tests/security.rs",
+        "crates/server/src/config.rs"
+      ],
+      "platforms": {
+        "linux": "verified (tests)"
+      }
+    },
+    {
+      "id": "security.request_guards",
+      "title": "Host validation, CSRF, CSP, admin boundary, rate limits",
+      "status": "implemented",
+      "paths": [
+        "crates/server/src/security.rs"
+      ],
+      "tests": [
+        "crates/server/tests/security.rs"
+      ],
+      "platforms": {
+        "linux": "verified (tests)"
+      }
+    },
+    {
+      "id": "security.secrets",
+      "title": "Encrypted token storage with key outside the database; redacted logs",
+      "status": "implemented",
+      "paths": [
+        "crates/server/src/crypto.rs",
+        "crates/core/src/redact.rs"
+      ],
+      "tests": [
+        "crates/server/src/crypto.rs",
+        "crates/core/src/redact.rs",
+        "crates/server/tests/security.rs"
+      ],
+      "platforms": {
+        "linux": "verified (tests)"
+      },
+      "limitations": [
+        "OS keychain storage is not used yet"
+      ]
+    },
+    {
+      "id": "security.untrusted_content",
+      "title": "Untrusted email/calendar content cannot trigger actions; injection flagged",
+      "status": "implemented",
+      "paths": [
+        "crates/core/src/extraction.rs",
+        "crates/server/src/share_render.rs"
+      ],
+      "tests": [
+        "crates/core/src/extraction.rs",
+        "crates/server/tests/connectors.rs",
+        "crates/server/tests/calendar.rs"
+      ],
+      "platforms": {
+        "linux": "verified (tests)"
+      }
+    },
+    {
+      "id": "tasks.conflicts",
+      "title": "Optimistic concurrency with conflict resolution UI",
+      "status": "implemented",
+      "paths": [
+        "crates/server/src/routes/tasks.rs",
+        "apps/web/src/components/TaskEditor.tsx"
+      ],
+      "tests": [
+        "crates/server/tests/tasks.rs"
+      ],
+      "platforms": {
+        "browser": "verified (Chromium desktop + phone emulation)",
+        "linux": "native shell built and launched",
+        "macos": "not verified",
+        "windows": "not verified",
+        "ios": "not verified",
+        "android": "not verified"
+      },
+      "limitations": [
+        "Field-level merge is not automatic; the person chooses theirs or mine"
+      ]
+    },
+    {
+      "id": "tasks.crud",
+      "title": "Tasks: notes, category, priority, duration, owner/assignee, dates, deadline, checklist, tags, filters, groups",
+      "status": "implemented",
+      "paths": [
+        "crates/server/src/routes/tasks.rs",
+        "apps/web/src/components/TaskEditor.tsx",
+        "apps/web/src/pages/Tasks.tsx"
+      ],
+      "routes": [
+        "GET/POST /api/tasks",
+        "GET/PATCH/DELETE /api/tasks/{id}"
+      ],
+      "tests": [
+        "crates/server/tests/tasks.rs",
+        "apps/web/e2e/app.spec.ts"
+      ],
+      "platforms": {
+        "browser": "verified (Chromium desktop + phone emulation)",
+        "linux": "native shell built and launched",
+        "macos": "not verified",
+        "windows": "not verified",
+        "ios": "not verified",
+        "android": "not verified"
+      }
+    },
+    {
+      "id": "tasks.history",
+      "title": "Activity history, reassignment and completion history",
+      "status": "implemented",
+      "paths": [
+        "crates/server/src/activity.rs",
+        "crates/server/src/routes/tasks.rs"
+      ],
+      "routes": [
+        "GET /api/tasks/{id}/history",
+        "GET /api/activity"
+      ],
+      "tests": [
+        "crates/server/tests/tasks.rs"
+      ],
+      "platforms": {
+        "browser": "verified (Chromium desktop + phone emulation)",
+        "linux": "native shell built and launched",
+        "macos": "not verified",
+        "windows": "not verified",
+        "ios": "not verified",
+        "android": "not verified"
+      }
+    },
+    {
+      "id": "usage.claude_manual",
+      "title": "Manual Claude usage-limit card (5h and 7d windows, checkpoints, resets, notes, reminders)",
+      "status": "implemented",
+      "paths": [
+        "crates/core/src/usage.rs",
+        "apps/web/src/components/UsageCard.tsx"
+      ],
+      "routes": [
+        "GET/PUT /api/usage"
+      ],
+      "tests": [
+        "crates/core/src/usage.rs",
+        "crates/server/tests/tasks.rs"
+      ],
+      "platforms": {
+        "browser": "verified (Chromium desktop + phone emulation)",
+        "linux": "native shell built and launched",
+        "macos": "not verified",
+        "windows": "not verified",
+        "ios": "not verified",
+        "android": "not verified"
+      },
+      "limitations": [
+        "Manual entry only; estimates"
+      ]
+    },
+    {
+      "id": "usage.claude_official_adapter",
+      "title": "Official Claude usage integration",
+      "status": "blocked",
+      "limitations": [
+        "No officially supported consumer usage-limit API was available; not implemented by design"
+      ]
+    }
+  ]
+}

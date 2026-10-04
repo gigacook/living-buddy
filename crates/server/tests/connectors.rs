@@ -350,3 +350,61 @@ async fn slack_adapter_reads_new_messages_and_handles_rate_limits() {
     let c = app.ok(Req::new("POST", format!("/api/admin/connectors/{id}/run"))).await;
     assert_eq!(c["status"], "rate_limited");
 }
+
+#[tokio::test]
+async fn microsoft_graph_adapter_follows_paging_and_delta_links() {
+    let base_holder = Arc::new(std::sync::Mutex::new(String::new()));
+    let b1 = base_holder.clone();
+    let router = Router::new()
+        .route(
+            "/v1.0/me/mailFolders/inbox/messages/delta",
+            get(move |q: axum::extract::Query<std::collections::HashMap<String, String>>, headers: axum::http::HeaderMap| {
+                let base = b1.lock().unwrap().clone();
+                async move {
+                    assert_eq!(headers.get("authorization").unwrap(), "Bearer graph-access");
+                    if q.contains_key("$deltatoken") {
+                        return Json(json!({"value": [{"id": "g3", "subject": "Dentist moved", "bodyPreview": "Your appointment is now on 2026-11-03 at 10:00.", "receivedDateTime": "2026-10-04T08:00:00Z"}, {"id": "g1", "@removed": {"reason": "deleted"}}], "@odata.deltaLink": format!("{base}/v1.0/me/mailFolders/inbox/messages/delta?$deltatoken=t2")}));
+                    }
+                    if q.contains_key("$skiptoken") {
+                        return Json(json!({"value": [{"id": "g2", "subject": "Rent reminder", "bodyPreview": "Rent is due 2026-11-01.", "receivedDateTime": "2026-10-03T09:00:00Z"}], "@odata.deltaLink": format!("{base}/v1.0/me/mailFolders/inbox/messages/delta?$deltatoken=t1")}));
+                    }
+                    Json(json!({"value": [{"id": "g1", "subject": "Parents evening", "bodyPreview": "Please confirm by Friday.", "receivedDateTime": "2026-10-02T09:00:00Z"}], "@odata.nextLink": format!("{base}/v1.0/me/mailFolders/inbox/messages/delta?$skiptoken=p2")}))
+                }
+            }),
+        );
+    let base = spawn(router).await;
+    *base_holder.lock().unwrap() = base.clone();
+    let dir = tempfile::tempdir().unwrap();
+    let mut cfg = tendly_server::config::Config::for_data_dir(dir.path().to_path_buf());
+    cfg.provider_base_overrides.graph = format!("{base}/v1.0");
+    let state = tendly_server::init_state(cfg).await.unwrap();
+    let app = TestApp::from_state(state, dir);
+    let a = app.member("Alex").await;
+    let c = app
+        .ok(Req::new("POST", "/api/admin/connectors").actor(&a).json(json!({"provider": "microsoft_graph", "displayName": "Work mail"})))
+        .await;
+    let id = c["id"].as_str().unwrap().to_string();
+    tendly_server::connectors::save_credentials(
+        &app.state,
+        &id,
+        &tendly_server::connectors::Credentials {
+            access_token: Some("graph-access".into()),
+            refresh_token: Some("r".into()),
+            expires_at: Some(app.state.now() + Duration::hours(1)),
+        },
+    )
+    .await
+    .unwrap();
+    app.ok(Req::new("PATCH", format!("/api/admin/connectors/{id}")).json(json!({"enabled": true}))).await;
+    let c = app.ok(Req::new("POST", format!("/api/admin/connectors/{id}/run"))).await;
+    assert_eq!(c["status"], "healthy", "{c}");
+    assert_eq!(c["itemsIngested"], 2, "both pages read");
+    let cursor: Option<String> = sqlx::query_scalar("SELECT cursor FROM connectors").fetch_one(&app.state.db).await.unwrap();
+    assert!(cursor.unwrap().ends_with("$deltatoken=t1"));
+    let c = app.ok(Req::new("POST", format!("/api/admin/connectors/{id}/run"))).await;
+    assert_eq!(c["itemsIngested"], 3, "delta adds one; removals are ignored");
+    // A cursor pointing at another host is never followed.
+    sqlx::query("UPDATE connectors SET cursor = 'https://evil.example/steal'").execute(&app.state.db).await.unwrap();
+    let c = app.ok(Req::new("POST", format!("/api/admin/connectors/{id}/run"))).await;
+    assert_eq!(c["status"], "healthy");
+}

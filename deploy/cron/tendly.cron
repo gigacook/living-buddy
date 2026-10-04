@@ -1,0 +1,4 @@
+# Alternative to the systemd timer: run due work every 5 minutes from cron.
+# Only use this if the server runs with TENDLY_EMBEDDED_WORKER=false.
+# Install with: crontab -u tendly deploy/cron/tendly.cron
+*/5 * * * * TENDLY_DATA_DIR=/var/lib/tendly TENDLY_ENCRYPTION_KEY_PATH=/etc/tendly/encryption.key /usr/local/bin/tendly worker --once >> /var/log/tendly-worker.log 2>&1

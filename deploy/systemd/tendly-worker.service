@@ -1,0 +1,19 @@
+# One-shot worker run, triggered by tendly-worker.timer.
+# Only use this if tendly.service has TENDLY_EMBEDDED_WORKER=false.
+[Unit]
+Description=Tendly worker (connectors, calendar refresh, retention)
+
+[Service]
+Type=oneshot
+User=tendly
+Group=tendly
+Environment=TENDLY_DATA_DIR=/var/lib/tendly
+Environment=TENDLY_ENCRYPTION_KEY_PATH=/etc/tendly/encryption.key
+EnvironmentFile=-/etc/tendly/tendly.env
+ExecStart=/usr/local/bin/tendly worker --once
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/var/lib/tendly
+ReadOnlyPaths=/etc/tendly

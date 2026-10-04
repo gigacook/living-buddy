@@ -48,7 +48,15 @@ pub async fn init_state(config: Config) -> Result<AppState> {
 /// Builds the full application router including security middleware and,
 /// when configured, the static web app.
 pub fn router(state: AppState) -> Router {
-    let mut app = routes::api(state.clone());
+    router_with_extensions(state, Router::new())
+}
+
+/// Extension point: merges additional routes (for example a separately
+/// maintained hosted-service module) *inside* the same security guard, so
+/// they inherit Host validation, CSRF checks, device authentication and the
+/// admin boundary. Extensions must not weaken those checks.
+pub fn router_with_extensions(state: AppState, extra: Router) -> Router {
+    let mut app = routes::api(state.clone()).merge(extra);
     if let Some(dir) = state.config.web_dir.clone() {
         let index = dir.join("index.html");
         app = app.fallback_service(ServeDir::new(&dir).fallback(ServeFile::new(index)));

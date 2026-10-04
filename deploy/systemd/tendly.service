@@ -1,0 +1,32 @@
+# Tendly server as a systemd service (local mode by default).
+# Install: copy the binary to /usr/local/bin/tendly and the web build to
+# /usr/local/share/tendly/web, then: systemctl enable --now tendly
+[Unit]
+Description=Tendly server
+After=network-online.target
+
+[Service]
+Type=simple
+User=tendly
+Group=tendly
+Environment=TENDLY_DATA_DIR=/var/lib/tendly
+Environment=TENDLY_WEB_DIR=/usr/local/share/tendly/web
+Environment=TENDLY_BIND=127.0.0.1:7878
+Environment=TENDLY_ENCRYPTION_KEY_PATH=/etc/tendly/encryption.key
+# Use the timer below instead of the embedded worker? Then set this to false.
+Environment=TENDLY_EMBEDDED_WORKER=true
+EnvironmentFile=-/etc/tendly/tendly.env
+ExecStart=/usr/local/bin/tendly serve
+Restart=on-failure
+StateDirectory=tendly
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/var/lib/tendly
+ReadOnlyPaths=/etc/tendly
+CapabilityBoundingSet=
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+
+[Install]
+WantedBy=multi-user.target

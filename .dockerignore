@@ -1,0 +1,16 @@
+# Keep the build context minimal and free of local data or secrets.
+target
+**/target
+node_modules
+**/node_modules
+apps/web/dist
+apps/web/test-results
+apps/web/playwright-report
+apps/native/src-tauri/gen
+data
+*.db
+*.db-*
+.env
+.env.*
+secrets
+.git
